@@ -316,7 +316,7 @@ typedef char *Char_Ptr;
         (struct _hash_table(K_T, V_T) *, K_T, V_T);                                          \
     typedef int (*CAT2(hash_table(K_T, V_T), _delete_t))                                     \
         (struct _hash_table(K_T, V_T) *, K_T);                                               \
-    typedef uint64_t (*CAT2(hash_table(K_T, V_T), _hash_t))(K_T);                            \
+    typedef unsigned long long (*CAT2(hash_table(K_T, V_T), _hash_t))(K_T);                  \
     typedef int (*CAT2(hash_table(K_T, V_T), _equ_t))(K_T, K_T);                             \
                                                                                              \
     typedef struct _hash_table(K_T, V_T) {                                                   \
