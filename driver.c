@@ -78,6 +78,7 @@ static void on_jule_error(Jule_Error_Info *info) {
         case JULE_ERR_UNEXPECTED_EOS:
         case JULE_ERR_UNEXPECTED_TOK:
             fprintf(stderr, "    LINE:   %d, COLUMN: %d\n", info->location.line, info->location.col);
+            break;
         default:
             fprintf(stderr, "    LINE:   %d\n", info->location.line);
             break;
@@ -97,11 +98,12 @@ static void on_jule_error(Jule_Error_Info *info) {
         case JULE_ERR_OBJECT_KEY_TYPE:
             fprintf(stderr, "    WANTED: number or string\n");
             fprintf(stderr, "    GOT:    %s\n", jule_type_string(info->got_type));
+            break;
         case JULE_ERR_NOT_A_FN:
             fprintf(stderr, "    GOT:    %s\n", jule_type_string(info->got_type));
             break;
         case JULE_ERR_BAD_INDEX:
-            s = jule_to_string(info->bad_index);
+            s = jule_to_string(info->bad_index, 0);
             fprintf(stderr, "    INDEX:  %s\n", s);
             JULE_FREE(s);
             break;

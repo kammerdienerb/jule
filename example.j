@@ -1,19 +1,21 @@
 fn
     A arg
-    print "in A" # I'm printing something
-    print arg
+    do
+        println "in A" # I'm printing something
+        println arg
 
 fn
     B arg
-    print arg
-    A "bar"
-    print arg
+    do
+        println arg
+        A "bar"
+        println arg
 
 # comment on a line
 
 B "foo" # no space
 
-print
+println
     list
         object
             . "a" 123
@@ -26,20 +28,22 @@ print
 
 fn
     true
-    print "TRUE"
-    1
+    do
+        println "TRUE"
+        1
 
 fn
     false
-    print "FALSE"
-    0
+    do
+        println "FALSE"
+        0
 
-print
+println
     and true false
 
 if 0
-     print "hi"
-     print "bye"
+     println "hi"
+     println "bye"
 
 set my-object
     object
@@ -47,44 +51,46 @@ set my-object
 
 fn
     test object field
-    print field
-    if
-        in object field
-        print "object has the field!"
-        print "object does not have the field"
+    do
+        println field
+        if
+            in object field
+            println "object has the field!"
+            println "object does not have the field"
 
 test my-object "test"
 test my-object "foo"
 
-print
+println
     field my-object "test"
 
 set i 0
 
 while
     < i 10
-    print "hi"
-    set i
-        + 1 i
+    do
+        println "hi"
+        set i
+            + 1 i
 
 set thing
     repeat 0
-        print "bye"
-print "-----------"
-print thing
+        println "bye"
+println "-----------"
+println thing
 while
     != nil thing
-    print "foo"
+    println "foo"
 
-print
+println
     set OBJ
         object
             . "foo" object
 
-print
+println
     set OBJ
         insert OBJ "my-field" 789
-print
+println
     set OBJ
         delete OBJ "foo"
 
@@ -99,7 +105,7 @@ fn
             fib
                 - n 2
 
-print
+println
     fib 6
 
 fn
@@ -110,5 +116,5 @@ fn
         *   n
             fact
                 - n 1
-print
+println
     fact 6
