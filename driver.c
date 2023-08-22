@@ -28,6 +28,7 @@ int main(int argc, char **argv) {
     jule_set_error_callback(&interp, on_jule_error);
     jule_parse(&interp, code, strlen(code));
     jule_interp(&interp);
+    jule_free(&interp);
 
     return 0;
 }
