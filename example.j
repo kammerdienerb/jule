@@ -74,7 +74,7 @@ while
             + 1 i
 
 set thing
-    repeat 0
+    repeat i 0
         println "bye"
 println "-----------"
 println thing
