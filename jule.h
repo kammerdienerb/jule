@@ -130,7 +130,7 @@ struct Jule_String_Struct {
 };
 
 static inline void jule_free_string(Jule_String *string) {
-    free(string->chars);
+    JULE_FREE(string->chars);
     string->chars = NULL;
     string->len   = 0;
 }
@@ -695,7 +695,7 @@ static void jule_free_value(Jule_Value *value);
 
 void jule_free_error_info(Jule_Error_Info *info) {
     if (info->sym != NULL) {
-        free(info->sym);
+        JULE_FREE(info->sym);
     }
     if (info->bad_index != NULL) {
         jule_free_value(info->bad_index);
@@ -791,6 +791,8 @@ static void jule_free_value(Jule_Value *value) {
     Jule_Value  *key;
     Jule_Value **val;
 
+    if (value->in_symtab || value->code) { return; }
+
     switch (value->type) {
         case JULE_NIL:
             break;
@@ -861,13 +863,15 @@ void jule_delete(Jule_Value *object, Jule_Value *key) {
     }
 }
 
-static Jule_Value *jule_copy(Jule_Value *value) {
+static Jule_Value *_jule_copy(Jule_Value *value, int force) {
     Jule_Value    *copy;
     Jule_Array     array = JULE_ARRAY_INIT;
     Jule_Value    *child;
     _Jule_Object   obj;
     Jule_Value    *key;
     Jule_Value   **val;
+
+    if (!force && (value->in_symtab || value->code)) { return value; }
 
     copy = _jule_value();
     memcpy(copy, value, sizeof(*copy));
@@ -885,7 +889,7 @@ static Jule_Value *jule_copy(Jule_Value *value) {
             break;
         case JULE_LIST:
             FOR_EACH(&copy->list, child) {
-                jule_push(&array, jule_copy(child));
+                jule_push(&array, _jule_copy(child, force));
             }
             copy->list = array;
             break;
@@ -893,12 +897,12 @@ static Jule_Value *jule_copy(Jule_Value *value) {
             obj = copy->object;
             copy->object = hash_table_make_e(Jule_Value_Ptr, Jule_Value_Ptr, jule_valhash, (void*)jule_equal);
             hash_table_traverse(obj, key, val) {
-                hash_table_insert((_Jule_Object)copy->object, jule_copy(key), jule_copy(*val));
+                hash_table_insert((_Jule_Object)copy->object, _jule_copy(key, force), _jule_copy(*val, force));
             }
             break;
         case _JULE_TREE:
             FOR_EACH(&copy->eval_values, child) {
-                jule_push(&array, jule_copy(child));
+                jule_push(&array, _jule_copy(child, force));
             }
             copy->eval_values = array;
             break;
@@ -909,7 +913,19 @@ static Jule_Value *jule_copy(Jule_Value *value) {
             break;
     }
 
+    if (force) {
+        copy->in_symtab = 0;
+    }
+
     return copy;
+}
+
+static Jule_Value *jule_copy(Jule_Value *value) {
+    return _jule_copy(value, 0);
+}
+
+static Jule_Value *jule_copy_force(Jule_Value *value) {
+    return _jule_copy(value, 1);
 }
 
 static int jule_equal(Jule_Value *a, Jule_Value *b) {
@@ -1380,7 +1396,7 @@ do {                                            \
             hash_table_traverse((_Jule_Object)value->object, key, val) {
                 _jule_string_print(buff, len, cap, key, flags & JULE_MULTILINE ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
                 PUSHC(':');
-                _jule_string_print(buff, len, cap, *val, 0, flags & ~JULE_NO_QUOTE);
+                _jule_string_print(buff, len, cap, *val, flags & JULE_MULTILINE ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
                 PUSHC(flags & JULE_MULTILINE ? '\n' : ' ');
             }
             if (flags & JULE_MULTILINE) {
@@ -1484,9 +1500,11 @@ Jule_Status jule_install_var(Jule_Interp *interp, const char *symbol, Jule_Value
 
     lookup = hash_table_get_val(interp->symtab, (char*)symbol);
     if (lookup != NULL) {
-        (*lookup)->in_symtab = 0;
-        jule_free_value(*lookup);
-        *lookup = val;
+        if (*lookup != val) {
+            (*lookup)->in_symtab = 0;
+            jule_free_value(*lookup);
+            *lookup = val;
+        }
     } else {
         hash_table_insert(interp->symtab, jule_charptr_dup(symbol), val);
     }
@@ -1581,7 +1599,7 @@ out_cleanup_args:;
             if (arg_val == NULL) {
                 key = *hash_table_get_key(interp->symtab, (char*)arg_sym->symbol);
                 hash_table_delete(interp->symtab, key);
-                free(key);
+                JULE_FREE(key);
             } else {
                 lookup = hash_table_get_val(interp->symtab, (char*)arg_sym->symbol);
                 assert(lookup != NULL);
@@ -1705,11 +1723,12 @@ static Jule_Status jule_args(Jule_Interp *interp, Jule_Value *tree, const char *
     unsigned      count;
     Jule_Array    eval = JULE_ARRAY_INIT;
     unsigned      i;
-    int           last;
-    int           c;
     int           no_eval;
+    int           deep_copy;
+    int           c;
     Jule_Value   *v;
     Jule_Value  **ve_ptr;
+    Jule_Value   *cpy;
     int           t;
 
     status = JULE_SUCCESS;
@@ -1721,12 +1740,18 @@ static Jule_Status jule_args(Jule_Interp *interp, Jule_Value *tree, const char *
         count += legend[i] != '-';
     }
 
-    i    = 0;
-    last = 0;
+    i         = 0;
+    no_eval   = 0;
+    deep_copy = 0;
     while ((c = *legend)) {
-        if (c == '-') { goto nextc; }
-
-        no_eval = last == '-';
+        if (c == '-') {
+            no_eval = 1;
+            goto nextc;
+        }
+        if (c == '!') {
+            deep_copy = 1;
+            goto nextc;
+        }
 
         v = jule_elem(&values, i);
         if (v == NULL) {
@@ -1738,7 +1763,11 @@ static Jule_Status jule_args(Jule_Interp *interp, Jule_Value *tree, const char *
         ve_ptr = va_arg(args, Jule_Value**);
 
         if (no_eval) {
-            *ve_ptr = jule_copy(v);
+            if (deep_copy) {
+                *ve_ptr = jule_copy_force(v);
+            } else {
+                *ve_ptr = jule_copy(v);
+            }
         } else {
             status = jule_eval(interp, v, ve_ptr);
             if (status != JULE_SUCCESS) {
@@ -1747,6 +1776,11 @@ static Jule_Status jule_args(Jule_Interp *interp, Jule_Value *tree, const char *
                 }
                 jule_free_array(&eval);
                 goto out;
+            }
+            if (deep_copy) {
+                cpy = jule_copy_force(*ve_ptr);
+                jule_free_value(*ve_ptr);
+                *ve_ptr = cpy;
             }
         }
 
@@ -1783,8 +1817,9 @@ static Jule_Status jule_args(Jule_Interp *interp, Jule_Value *tree, const char *
 
         jule_push(&eval, *ve_ptr);
 
+        no_eval = deep_copy = 0;
+
 nextc:;
-        last    = c;
         legend += 1;
     }
 
@@ -1806,6 +1841,7 @@ static Jule_Status jule_builtin_set(Jule_Interp *interp, Jule_Value *tree, Jule_
     Jule_Status  status;
     Jule_Value  *sym;
     Jule_Value  *val;
+    Jule_Value  *cpy;
 
     status = jule_args(interp, tree, "-$*", values, &sym, &val);
     if (status != JULE_SUCCESS) {
@@ -1813,11 +1849,15 @@ static Jule_Status jule_builtin_set(Jule_Interp *interp, Jule_Value *tree, Jule_
         goto out;
     }
 
+    if (val->in_symtab) {
+        cpy = jule_copy_force(val);
+        jule_free_value(val);
+        val = cpy;
+    }
+
     jule_install_var(interp, sym->symbol, val);
 
-    *result = jule_copy(val);
-
-    jule_free_value(sym);
+    *result = sym;
 
 out:;
     return status;
@@ -1900,6 +1940,9 @@ static Jule_Status jule_builtin_id(Jule_Interp *interp, Jule_Value *tree, Jule_A
             }
 
             ev = jule_copy(lookup);
+            break;
+        case _JULE_TREE:
+            ev = jule_copy(value);
             break;
         default:
             assert(0);
@@ -2889,6 +2932,25 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_append(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status   status;
+    Jule_Value   *list;
+    Jule_Value   *val;
+
+    status = jule_args(interp, tree, "l!*", values, &list, &val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    jule_push(&list->list, val);
+
+    *result = list;
+
+out:;
+    return status;
+}
+
 static Jule_Status jule_builtin_field(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
     Jule_Status   status;
     Jule_Value   *object;
@@ -2957,7 +3019,7 @@ static Jule_Status jule_builtin_insert(Jule_Interp *interp, Jule_Value *tree, Ju
     Jule_Value   *key;
     Jule_Value   *val;
 
-    status = jule_args(interp, tree, "ok*", values, &object, &key, &val);
+    status = jule_args(interp, tree, "o!k!*", values, &object, &key, &val);
     if (status != JULE_SUCCESS) {
         *result = NULL;
         goto out;
@@ -3073,6 +3135,7 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     jule_install_fn(interp, "list",    jule_builtin_list);
     jule_install_fn(interp, ".",       jule_builtin_dot);
     jule_install_fn(interp, "elem",    jule_builtin_elem);
+    jule_install_fn(interp, "append",  jule_builtin_append);
     jule_install_fn(interp, "object",  jule_builtin_object);
     jule_install_fn(interp, "in",      jule_builtin_in);
     jule_install_fn(interp, "field",   jule_builtin_field);
@@ -3120,6 +3183,7 @@ void jule_free(Jule_Interp *interp) {
     hash_table_traverse(interp->symtab, key, val) {
         real_key = *hash_table_get_key(interp->symtab, key);
         JULE_FREE(real_key);
+        (*val)->in_symtab = 0;
         jule_free_value(*val);
     }
     hash_table_free(interp->symtab);

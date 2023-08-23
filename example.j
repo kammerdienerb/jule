@@ -82,18 +82,17 @@ while
     != nil thing
     println "foo"
 
-println
-    set OBJ
-        object
-            . "foo" object
-
-println
-    set OBJ
-        insert OBJ "my-field" 789
-println
-    set OBJ
-        delete OBJ "foo"
-
+set OBJ
+    object
+        . "foo" object
+println OBJ
+println "-----------"
+insert OBJ "my-field" 789
+println OBJ
+println "-----------"
+delete OBJ "foo"
+println OBJ
+println "-----------"
 fn
     fib n
     if
