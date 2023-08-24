@@ -201,6 +201,16 @@ static inline void jule_pop(Jule_Array *array) {
     }
 }
 
+static inline void jule_erase(Jule_Array *array, unsigned idx) {
+    if (idx < 0 || idx >= array->len) {
+        return;
+    }
+
+    memmove(array->data + idx, array->data + idx + 1, (array->len - idx - 1) * sizeof(*array->data));
+
+    array->len -= 1;
+}
+
 static inline void *jule_elem(Jule_Array *array, unsigned idx) {
     if (idx < 0 || idx >= array->len) {
         return NULL;
@@ -624,7 +634,7 @@ static unsigned long long jule_string_hash(Jule_String *s) {
 
 static int jule_string_equ(Jule_String *s1, Jule_String *s2) {
     if (s1->len == s2->len) {
-        return strncmp(s1->chars, s2->chars, s1->len) == 0;
+        return memcmp(s1->chars, s2->chars, s1->len) == 0;
     }
 
     return 0;
@@ -812,12 +822,16 @@ static void jule_free_value(Jule_Value *value) {
             break;
         case JULE_LIST:
             FOR_EACH(&value->list, child) {
+                child->in_symtab = 0;
                 jule_free_value(child);
             }
             jule_free_array(&value->list);
             break;
         case JULE_OBJECT:
             hash_table_traverse((_Jule_Object)value->object, key, val) {
+                key->in_symtab    = 0;
+                (*val)->in_symtab = 0;
+
                 jule_free_value(key);
                 jule_free_value(*val);
             }
@@ -826,6 +840,7 @@ static void jule_free_value(Jule_Value *value) {
             break;
         case _JULE_TREE:
             FOR_EACH(&value->eval_values, child) {
+                child->in_symtab = 0;
                 jule_free_value(child);
             }
             jule_free_array(&value->eval_values);
@@ -2251,6 +2266,24 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_not(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *a;
+
+    status = jule_args(interp, tree, "n", values, &a);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    *result = jule_number_value(a->number == 0);
+
+    jule_free_value(a);
+
+out:;
+    return status;
+}
+
 static Jule_Status jule_builtin_and(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *cond;
@@ -2776,7 +2809,7 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
 
     if (container->type == JULE_LIST) {
         FOR_EACH(&container->list, it) {
-            jule_install_var(interp, sym->symbol, jule_copy(it));
+            jule_install_local(interp, sym->symbol, jule_copy_force(it));
 
             status = jule_eval(interp, expr, &ev);
             if (status != JULE_SUCCESS) {
@@ -2793,7 +2826,7 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
     } else {
         i = 0;
         hash_table_traverse((_Jule_Object)container->object, it, val) {
-            jule_install_var(interp, sym->symbol, jule_copy(it));
+            jule_install_local(interp, sym->symbol, jule_copy_force(it));
 
             status = jule_eval(interp, expr, &ev);
             if (status != JULE_SUCCESS) {
@@ -2938,11 +2971,15 @@ out:;
 
 static Jule_Status jule_builtin_in(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
     Jule_Status   status;
-    Jule_Value   *object;
+    int           found;
+    Jule_Value   *container;
     Jule_Value   *key;
     Jule_Value  **lookup;
+    Jule_Value   *it;
 
     status = JULE_SUCCESS;
+
+    found = 0;
 
     if (values.len != 2) {
         status = JULE_ERR_ARITY;
@@ -2951,41 +2988,51 @@ static Jule_Status jule_builtin_in(Jule_Interp *interp, Jule_Value *tree, Jule_A
         goto out;
     }
 
-    status = jule_eval(interp, jule_elem(&values, 0), &object);
+    status = jule_eval(interp, jule_elem(&values, 0), &container);
     if (status != JULE_SUCCESS) {
         *result = NULL;
         goto out;
     }
 
-    if (object->type != JULE_OBJECT) {
-        status = JULE_ERR_TYPE;
-        jule_make_type_error(interp, object->line, JULE_OBJECT, object->type);
-        *result = NULL;
-        goto out_free_object;
-    }
-
     status = jule_eval(interp, jule_elem(&values, 1), &key);
     if (status != JULE_SUCCESS) {
         *result = NULL;
-        goto out_free_object;
+        goto out_free_container;
     }
 
-    if (key->type != JULE_NUMBER && key->type != JULE_STRING) {
-        status = JULE_ERR_OBJECT_KEY_TYPE;
-        jule_make_object_key_type_error(interp, key->line, key->type);
+    if (container->type == JULE_OBJECT) {
+        if (key->type != JULE_NUMBER && key->type != JULE_STRING) {
+            status = JULE_ERR_OBJECT_KEY_TYPE;
+            jule_make_object_key_type_error(interp, key->line, key->type);
+            *result = NULL;
+            goto out_free_key;
+        }
+
+        lookup = hash_table_get_val((_Jule_Object)container->object, key);
+
+        found = lookup != NULL;
+
+    } else if (container->type == JULE_LIST) {
+        FOR_EACH(&container->list, it) {
+            if (jule_equal(key, it)) {
+                found = 1;
+                break;
+            }
+        }
+    } else {
+        status = JULE_ERR_TYPE;
+        jule_make_type_error(interp, container->line, _JULE_LIST_OR_OBJECT, container->type);
         *result = NULL;
         goto out_free_key;
     }
 
-    lookup = hash_table_get_val((_Jule_Object)object->object, key);
-
-    *result = jule_number_value(lookup != NULL);
+    *result = jule_number_value(found);
 
 out_free_key:;
     jule_free_value(key);
 
-out_free_object:;
-    jule_free_value(object);
+out_free_container:;
+    jule_free_value(container);
 
 out:;
     return status;
@@ -2997,6 +3044,7 @@ static Jule_Status jule_builtin_elem(Jule_Interp *interp, Jule_Value *tree, Jule
     Jule_Value   *list;
     Jule_Value   *idx;
     unsigned      i;
+    Jule_Value   *val;
 
     status = jule_args(interp, tree, "ln", values, &list, &idx);
     if (status != JULE_SUCCESS) {
@@ -3013,7 +3061,10 @@ static Jule_Status jule_builtin_elem(Jule_Interp *interp, Jule_Value *tree, Jule
         goto out_free;
     }
 
-    *result = jule_copy(jule_elem(&list->list, i));
+    val = jule_elem(&list->list, i);
+    val->in_symtab = list->in_symtab;
+
+    *result = jule_copy(val);
 
 out_free:;
     jule_free_value(idx);
@@ -3091,6 +3142,7 @@ static Jule_Status jule_builtin_field(Jule_Interp *interp, Jule_Value *tree, Jul
         *result = NULL;
         goto out_free_key;
     } else {
+        (*lookup)->in_symtab = object->in_symtab;
         *result = jule_copy(*lookup);
     }
 
@@ -3105,10 +3157,10 @@ out:;
 }
 
 static Jule_Status jule_builtin_insert(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
-    Jule_Status   status;
-    Jule_Value   *object;
-    Jule_Value   *key;
-    Jule_Value   *val;
+    Jule_Status  status;
+    Jule_Value  *object;
+    Jule_Value  *key;
+    Jule_Value  *val;
 
     status = jule_args(interp, tree, "o!k!*", values, &object, &key, &val);
     if (status != JULE_SUCCESS) {
@@ -3125,9 +3177,9 @@ out:;
 }
 
 static Jule_Status jule_builtin_delete(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
-    Jule_Status   status;
-    Jule_Value   *object;
-    Jule_Value   *key;
+    Jule_Status  status;
+    Jule_Value  *object;
+    Jule_Value  *key;
 
     status = jule_args(interp, tree, "ok", values, &object, &key);
     if (status != JULE_SUCCESS) {
@@ -3140,6 +3192,104 @@ static Jule_Status jule_builtin_delete(Jule_Interp *interp, Jule_Value *tree, Ju
     jule_free_value(key);
 
     *result = object;
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_update_object(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status   status;
+    Jule_Value   *o1;
+    Jule_Value   *o2;
+    Jule_Value   *key;
+    Jule_Value **val;
+
+    status = jule_args(interp, tree, "oo", values, &o1, &o2);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    hash_table_traverse((_Jule_Object)o2->object, key, val) {
+        jule_insert(o1, jule_copy(key), jule_copy(*val));
+    }
+
+    jule_free_value(o2);
+
+    *result = o1;
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_erase(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status   status;
+    Jule_Value   *list;
+    Jule_Value   *idx;
+
+    status = jule_args(interp, tree, "ln", values, &list, &idx);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    jule_erase(&list->list, (unsigned)idx->number);
+
+    jule_free_value(idx);
+
+    *result = list;
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_keys(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status   status;
+    Jule_Value   *object;
+    Jule_Value   *list;
+    Jule_Value   *key;
+    Jule_Value  **val;
+
+    status = jule_args(interp, tree, "o", values, &object);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    list = jule_list_value();
+    hash_table_traverse((_Jule_Object)object->object, key, val) {
+        jule_push(&list->list, jule_copy_force(key));
+    }
+
+    jule_free_value(object);
+
+    *result = list;
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_values(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status   status;
+    Jule_Value   *object;
+    Jule_Value   *list;
+    Jule_Value   *key;
+    Jule_Value  **val;
+
+    status = jule_args(interp, tree, "o", values, &object);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    list = jule_list_value();
+    hash_table_traverse((_Jule_Object)object->object, key, val) {
+        jule_push(&list->list, jule_copy_force(*val));
+    }
+
+    jule_free_value(object);
+
+    *result = list;
 
 out:;
     return status;
@@ -3200,42 +3350,47 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     interp->symtab       = hash_table_make_e(Char_Ptr, Jule_Value_Ptr, jule_charptr_hash, (void*)jule_charptr_equ);
     interp->local_symtab = hash_table_make_e(Char_Ptr, Jule_Value_Ptr, jule_charptr_hash, (void*)jule_charptr_equ);
 
-    jule_install_fn(interp, "set",     jule_builtin_set);
-    jule_install_fn(interp, "local",   jule_builtin_local);
-    jule_install_fn(interp, "fn",      jule_builtin_fn);
-    jule_install_fn(interp, "id",      jule_builtin_id);
-    jule_install_fn(interp, "+",       jule_builtin_add);
-    jule_install_fn(interp, "-",       jule_builtin_sub);
-    jule_install_fn(interp, "*",       jule_builtin_mul);
-    jule_install_fn(interp, "/",       jule_builtin_div);
-    jule_install_fn(interp, "%",       jule_builtin_mod);
-    jule_install_fn(interp, "==",      jule_builtin_equ);
-    jule_install_fn(interp, "!=",      jule_builtin_neq);
-    jule_install_fn(interp, "<",       jule_builtin_lss);
-    jule_install_fn(interp, "<=",      jule_builtin_leq);
-    jule_install_fn(interp, ">",       jule_builtin_gtr);
-    jule_install_fn(interp, ">=",      jule_builtin_geq);
-    jule_install_fn(interp, "and",     jule_builtin_and);
-    jule_install_fn(interp, "or",      jule_builtin_or);
-    jule_install_fn(interp, "print",   jule_builtin_print);
-    jule_install_fn(interp, "println", jule_builtin_println);
-    jule_install_fn(interp, "fmt",     jule_builtin_fmt);
-    jule_install_fn(interp, "pad",     jule_builtin_pad);
-    jule_install_fn(interp, "do",      jule_builtin_do);
-    jule_install_fn(interp, "if",      jule_builtin_if);
-    jule_install_fn(interp, "while",   jule_builtin_while);
-    jule_install_fn(interp, "repeat",  jule_builtin_repeat);
-    jule_install_fn(interp, "foreach", jule_builtin_foreach);
-    jule_install_fn(interp, "list",    jule_builtin_list);
-    jule_install_fn(interp, ".",       jule_builtin_dot);
-    jule_install_fn(interp, "elem",    jule_builtin_elem);
-    jule_install_fn(interp, "append",  jule_builtin_append);
-    jule_install_fn(interp, "object",  jule_builtin_object);
-    jule_install_fn(interp, "in",      jule_builtin_in);
-    jule_install_fn(interp, "field",   jule_builtin_field);
-    jule_install_fn(interp, "insert",  jule_builtin_insert);
-    jule_install_fn(interp, "delete",  jule_builtin_delete);
-    jule_install_fn(interp, "len",     jule_builtin_len);
+    jule_install_fn(interp, "set",           jule_builtin_set);
+    jule_install_fn(interp, "local",         jule_builtin_local);
+    jule_install_fn(interp, "fn",            jule_builtin_fn);
+    jule_install_fn(interp, "id",            jule_builtin_id);
+    jule_install_fn(interp, "+",             jule_builtin_add);
+    jule_install_fn(interp, "-",             jule_builtin_sub);
+    jule_install_fn(interp, "*",             jule_builtin_mul);
+    jule_install_fn(interp, "/",             jule_builtin_div);
+    jule_install_fn(interp, "%",             jule_builtin_mod);
+    jule_install_fn(interp, "==",            jule_builtin_equ);
+    jule_install_fn(interp, "!=",            jule_builtin_neq);
+    jule_install_fn(interp, "<",             jule_builtin_lss);
+    jule_install_fn(interp, "<=",            jule_builtin_leq);
+    jule_install_fn(interp, ">",             jule_builtin_gtr);
+    jule_install_fn(interp, ">=",            jule_builtin_geq);
+    jule_install_fn(interp, "not",           jule_builtin_not);
+    jule_install_fn(interp, "and",           jule_builtin_and);
+    jule_install_fn(interp, "or",            jule_builtin_or);
+    jule_install_fn(interp, "print",         jule_builtin_print);
+    jule_install_fn(interp, "println",       jule_builtin_println);
+    jule_install_fn(interp, "fmt",           jule_builtin_fmt);
+    jule_install_fn(interp, "pad",           jule_builtin_pad);
+    jule_install_fn(interp, "do",            jule_builtin_do);
+    jule_install_fn(interp, "if",            jule_builtin_if);
+    jule_install_fn(interp, "while",         jule_builtin_while);
+    jule_install_fn(interp, "repeat",        jule_builtin_repeat);
+    jule_install_fn(interp, "foreach",       jule_builtin_foreach);
+    jule_install_fn(interp, "list",          jule_builtin_list);
+    jule_install_fn(interp, ".",             jule_builtin_dot);
+    jule_install_fn(interp, "elem",          jule_builtin_elem);
+    jule_install_fn(interp, "append",        jule_builtin_append);
+    jule_install_fn(interp, "object",        jule_builtin_object);
+    jule_install_fn(interp, "in",            jule_builtin_in);
+    jule_install_fn(interp, "field",         jule_builtin_field);
+    jule_install_fn(interp, "insert",        jule_builtin_insert);
+    jule_install_fn(interp, "delete",        jule_builtin_delete);
+    jule_install_fn(interp, "update-object", jule_builtin_update_object);
+    jule_install_fn(interp, "erase",         jule_builtin_erase);
+    jule_install_fn(interp, "len",           jule_builtin_len);
+    jule_install_fn(interp, "keys",          jule_builtin_keys);
+    jule_install_fn(interp, "values",        jule_builtin_values);
 
     return JULE_SUCCESS;
 }
