@@ -2326,6 +2326,7 @@ out:;
 
 static Jule_Status jule_builtin_and(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
     Jule_Status  status;
+    int          short_circuit;
     Jule_Value  *cond;
     Jule_Value  *ev;
 
@@ -2338,6 +2339,8 @@ static Jule_Status jule_builtin_and(Jule_Interp *interp, Jule_Value *tree, Jule_
         goto out;
     }
 
+    short_circuit = 0;
+
     FOR_EACH(&values, cond) {
         status = jule_eval(interp, cond, &ev);
         if (status != JULE_SUCCESS) {
@@ -2348,24 +2351,22 @@ static Jule_Status jule_builtin_and(Jule_Interp *interp, Jule_Value *tree, Jule_
         if (ev->type != JULE_NUMBER) {
             status = JULE_ERR_TYPE;
             jule_make_type_error(interp, ev->line, JULE_NUMBER, ev->type);
+            jule_free_value(ev);
             *result = NULL;
-            goto out_free_cond;
+            goto out;
         }
 
-        if (ev->number == 0) {
+        short_circuit = ev->number == 0;
+
+        jule_free_value(ev);
+
+        if (short_circuit) {
             *result = jule_number_value(0);
-            goto out_free_cond;
+            goto out;
         }
-
-        jule_free_value(cond);
     }
 
     *result = jule_number_value(1);
-
-    goto out;
-
-out_free_cond:;
-    jule_free_value(cond);
 
 out:;
     return status;
@@ -2373,6 +2374,7 @@ out:;
 
 static Jule_Status jule_builtin_or(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
     Jule_Status  status;
+    int          short_circuit;
     Jule_Value  *cond;
     Jule_Value  *ev;
 
@@ -2385,6 +2387,8 @@ static Jule_Status jule_builtin_or(Jule_Interp *interp, Jule_Value *tree, Jule_A
         goto out;
     }
 
+    short_circuit = 0;
+
     FOR_EACH(&values, cond) {
         status = jule_eval(interp, cond, &ev);
         if (status != JULE_SUCCESS) {
@@ -2395,24 +2399,22 @@ static Jule_Status jule_builtin_or(Jule_Interp *interp, Jule_Value *tree, Jule_A
         if (ev->type != JULE_NUMBER) {
             status = JULE_ERR_TYPE;
             jule_make_type_error(interp, ev->line, JULE_NUMBER, ev->type);
+            jule_free_value(ev);
             *result = NULL;
-            goto out_free_cond;
+            goto out;
         }
 
-        if (ev->number != 0) {
+        short_circuit = ev->number != 0;
+
+        jule_free_value(ev);
+
+        if (short_circuit) {
             *result = jule_number_value(1);
-            goto out_free_cond;
+            goto out;
         }
-
-        jule_free_value(cond);
     }
 
     *result = jule_number_value(0);
-
-    goto out;
-
-out_free_cond:;
-    jule_free_value(cond);
 
 out:;
     return status;
