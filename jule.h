@@ -90,6 +90,7 @@ Jule_Status  jule_parse(Jule_Interp *interp, const char *str, int size);
 Jule_Status  jule_interp(Jule_Interp *interp);
 Jule_Value  *jule_nil_value(void);
 Jule_Value  *jule_number_value(double num);
+Jule_Value  *jule_string_value_consume(char *str);
 Jule_Value  *jule_string_value(const char *str, unsigned long long len);
 Jule_Value  *jule_symbol_value(const char *symbol, int len);
 Jule_Value  *jule_list_value(void);
@@ -145,6 +146,15 @@ static inline Jule_String jule_string(const char *s, unsigned long long len) {
     string.len   = len;
     string.chars = JULE_MALLOC(string.len);
     memcpy(string.chars, s, string.len);
+
+    return string;
+}
+
+static inline Jule_String jule_string_consume(char *s) {
+    Jule_String string;
+
+    string.len   = strlen(s);
+    string.chars = s;
 
     return string;
 }
@@ -744,6 +754,17 @@ Jule_Value *jule_number_value(double num) {
 
     value->type   = JULE_NUMBER;
     value->number = num;
+
+    return value;
+}
+
+Jule_Value *jule_string_value_consume(char *str) {
+    Jule_Value *value;
+
+    value = _jule_value();
+
+    value->type   = JULE_STRING;
+    value->string = jule_string_consume(str);
 
     return value;
 }
@@ -2397,6 +2418,68 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_string(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *val;
+
+    status = jule_args(interp, tree, "*", values, &val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    *result = jule_string_value_consume(jule_to_string(val, JULE_NO_QUOTE));
+
+    jule_free_value(val);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_pad(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *w;
+    Jule_Value  *val;
+    int          width;
+    int          ljust;
+    char        *s;
+    int          len;
+    int          padding;
+    char        *padded;
+
+    status = jule_args(interp, tree, "n*", values, &w, &val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    width = (int)w->number;
+    ljust = width < 0;
+    s     = jule_to_string(val, JULE_NO_QUOTE);
+    len   = strlen(s);
+
+    if (ljust) { width = -width; }
+
+    padding = width > len
+                ? width - len
+                : 0;
+
+    padded = JULE_MALLOC(len + padding + 1);
+    memset(padded, ' ', len + padding);
+    memcpy(padded + ((!ljust) * padding), s, len);
+    padded[len + padding] = 0;
+
+    *result = jule_string_value_consume(padded);
+
+    JULE_FREE(s);
+
+    jule_free_value(w);
+    jule_free_value(val);
+
+out:;
+    return status;
+}
+
 static Jule_Status _jule_builtin_print(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result, int nl) {
     Jule_Status  status;
     Jule_Value  *it;
@@ -2533,8 +2616,7 @@ static Jule_Status jule_builtin_fmt(Jule_Interp *interp, Jule_Value *tree, Jule_
         last = c;
     }
 
-    *result = jule_string_value(formatted, len);
-    JULE_FREE(formatted);
+    *result = jule_string_value_consume(formatted);
 
 out_free_strings:;
     FOR_EACH(&strings, s) {
@@ -2544,50 +2626,6 @@ out_free_strings:;
 
 out_free_fmt:;
     jule_free_value(fmt);
-
-out:;
-    return status;
-}
-
-static Jule_Status jule_builtin_pad(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
-    Jule_Status  status;
-    Jule_Value  *w;
-    Jule_Value  *val;
-    int          width;
-    int          ljust;
-    char        *s;
-    int          len;
-    int          padding;
-    char        *padded;
-
-    status = jule_args(interp, tree, "n*", values, &w, &val);
-    if (status != JULE_SUCCESS) {
-        *result = NULL;
-        goto out;
-    }
-
-    width = (int)w->number;
-    ljust = width < 0;
-    s     = jule_to_string(val, JULE_NO_QUOTE);
-    len   = strlen(s);
-
-    if (ljust) { width = -width; }
-
-    padding = width > len
-                ? width - len
-                : 0;
-
-    padded = JULE_MALLOC(len + padding);
-    memset(padded, ' ', len + padding);
-    memcpy(padded + ((!ljust) * padding), s, len);
-
-    *result = jule_string_value(padded, len + padding);
-
-    JULE_FREE(padded);
-    JULE_FREE(s);
-
-    jule_free_value(w);
-    jule_free_value(val);
 
 out:;
     return status;
@@ -3408,8 +3446,9 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     jule_install_fn(interp, "or",            jule_builtin_or);
     jule_install_fn(interp, "print",         jule_builtin_print);
     jule_install_fn(interp, "println",       jule_builtin_println);
-    jule_install_fn(interp, "fmt",           jule_builtin_fmt);
+    jule_install_fn(interp, "string",        jule_builtin_string);
     jule_install_fn(interp, "pad",           jule_builtin_pad);
+    jule_install_fn(interp, "fmt",           jule_builtin_fmt);
     jule_install_fn(interp, "do",            jule_builtin_do);
     jule_install_fn(interp, "if",            jule_builtin_if);
     jule_install_fn(interp, "while",         jule_builtin_while);
