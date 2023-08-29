@@ -1,13 +1,10 @@
 #include <stdio.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
 
 #define JULE_IMPL
 #include "jule.h"
 
 Jule_Interp interp;
 
-static int map_file_into_readonly_memory(const char *path, const char **addr, int *size);
 static void on_jule_error(Jule_Error_Info *info);
 
 int main(int argc, char **argv) {
@@ -19,7 +16,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if (map_file_into_readonly_memory(argv[1], &code, &code_size)) {
+    if (jule_map_file_into_readonly_memory(argv[1], &code, &code_size)) {
         fprintf(stderr, "error opening '%s'\n", argv[1]);
         return 1;
     }
@@ -27,46 +24,13 @@ int main(int argc, char **argv) {
     jule_init_interp(&interp);
     jule_set_error_callback(&interp, on_jule_error);
     jule_parse(&interp, code, strlen(code));
+    interp.cur_file = jule_charptr_dup(argv[1]);
     jule_interp(&interp);
     jule_free(&interp);
 
     return 0;
 }
 
-
-static int map_file_into_readonly_memory(const char *path, const char **addr, int *size) {
-    int          status;
-    FILE        *f;
-    int          fd;
-    struct stat  fs;
-
-    status = 0;
-    f      = fopen(path, "r");
-
-    if (f == NULL) { status = 1; goto out; }
-
-    fd = fileno(f);
-
-    if      (fstat(fd, &fs) != 0) { status = 2; goto out_fclose; }
-    else if (S_ISDIR(fs.st_mode)) { status = 3; goto out_fclose; }
-
-    *size = fs.st_size;
-
-    if (*size == 0) {
-        *addr = NULL;
-        goto out_fclose;
-    }
-
-    *addr = mmap(NULL, *size, PROT_READ, MAP_SHARED, fd, 0);
-
-    if (*addr == MAP_FAILED) { return 4; }
-
-out_fclose:
-    fclose(f);
-
-out:
-    return status;
-}
 
 static void on_jule_error(Jule_Error_Info *info) {
     Jule_Status  status;
@@ -75,6 +39,11 @@ static void on_jule_error(Jule_Error_Info *info) {
     status = info->status;
 
     fprintf(stderr, "Jule Error: %s\n", jule_error_string(status));
+
+    if (info->file != NULL) {
+        fprintf(stderr, "    FILE:   %s\n", info->file);
+    }
+
     switch (status) {
         case JULE_ERR_UNEXPECTED_EOS:
         case JULE_ERR_UNEXPECTED_TOK:

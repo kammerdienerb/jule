@@ -117,3 +117,6 @@ fn
                 - n 1
 println
     fact 6
+
+eval-file "test.j"
+test:foo
