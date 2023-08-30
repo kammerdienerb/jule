@@ -2086,6 +2086,58 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_eset(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *sym;
+    Jule_Value  *val;
+    Jule_Value  *cpy;
+
+    status = jule_args(interp, tree, "$*", values, &sym, &val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    if (val->in_symtab) {
+        cpy = jule_copy_force(val);
+        jule_free_value(val);
+        val = cpy;
+    }
+
+    jule_install_var(interp, sym->symbol, val);
+
+    *result = sym;
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_elocal(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *sym;
+    Jule_Value  *val;
+    Jule_Value  *cpy;
+
+    status = jule_args(interp, tree, "$*", values, &sym, &val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    if (val->in_symtab) {
+        cpy = jule_copy_force(val);
+        jule_free_value(val);
+        val = cpy;
+    }
+
+    jule_install_local(interp, sym->symbol, val);
+
+    *result = sym;
+
+out:;
+    return status;
+}
+
 static Jule_Status jule_builtin_fn(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *def_tree;
@@ -2557,6 +2609,24 @@ static Jule_Status jule_builtin_string(Jule_Interp *interp, Jule_Value *tree, Ju
     *result = jule_string_value_consume(jule_to_string(val, JULE_NO_QUOTE));
 
     jule_free_value(val);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_symbol(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *str;
+
+    status = jule_args(interp, tree, "s", values, &str);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    *result = jule_symbol_value(str->string.chars, str->string.len);
+
+    jule_free_value(str);
 
 out:;
     return status;
@@ -3654,6 +3724,8 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
 
     jule_install_fn(interp, "set",           jule_builtin_set);
     jule_install_fn(interp, "local",         jule_builtin_local);
+    jule_install_fn(interp, "eset",          jule_builtin_eset);
+    jule_install_fn(interp, "elocal",        jule_builtin_elocal);
     jule_install_fn(interp, "fn",            jule_builtin_fn);
     jule_install_fn(interp, "id",            jule_builtin_id);
     jule_install_fn(interp, "quote",         jule_builtin_quote);
@@ -3674,6 +3746,7 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     jule_install_fn(interp, "print",         jule_builtin_print);
     jule_install_fn(interp, "println",       jule_builtin_println);
     jule_install_fn(interp, "string",        jule_builtin_string);
+    jule_install_fn(interp, "symbol",        jule_builtin_symbol);
     jule_install_fn(interp, "pad",           jule_builtin_pad);
     jule_install_fn(interp, "fmt",           jule_builtin_fmt);
     jule_install_fn(interp, "do",            jule_builtin_do);
