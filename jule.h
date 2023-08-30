@@ -298,7 +298,8 @@ struct Jule_Value_Struct {
     unsigned                type      :  4;
     unsigned                in_symtab :  1;
     unsigned                local     :  1;
-    unsigned                ind_level : 10;
+    unsigned                code      :  1;
+    unsigned                ind_level :  9;
     unsigned                line      : 16;
 };
 
@@ -879,7 +880,7 @@ static void jule_free_value(Jule_Value *value) {
     Jule_Value  *key;
     Jule_Value **val;
 
-    if (value->in_symtab) { return; }
+    if (value->in_symtab || value->code) { return; }
 
     switch (value->type) {
         case JULE_NIL:
@@ -972,7 +973,7 @@ static Jule_Value *_jule_copy(Jule_Value *value, int force) {
     Jule_Value    *key;
     Jule_Value   **val;
 
-    if (!force && value->in_symtab) { return value; }
+    if (!force && (value->in_symtab || value->code)) { return value; }
 
     copy = _jule_value();
     memcpy(copy, value, sizeof(*copy));
@@ -1017,6 +1018,8 @@ static Jule_Value *_jule_copy(Jule_Value *value, int force) {
 
     if (force) {
         copy->in_symtab = 0;
+        copy->local     = 0;
+        copy->code      = 0;
     }
 
     return copy;
@@ -1415,6 +1418,7 @@ add_char:;
 
         val->ind_level = ind;
         val->line      = cxt->line;
+        val->code      = 1;
 
         if (first) {
             if (top != NULL) {
@@ -2122,7 +2126,7 @@ static Jule_Status jule_builtin_fn(Jule_Interp *interp, Jule_Value *tree, Jule_A
     fn       = jule_copy(tree);
     fn->type = _JULE_FN;
 
-    jule_install_var(interp, sym->symbol, jule_copy(fn));
+    jule_install_var(interp, sym->symbol, fn);
 
     *result = jule_copy(sym);
 
