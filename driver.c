@@ -77,6 +77,11 @@ static void on_jule_error(Jule_Error_Info *info) {
             fprintf(stderr, "    INDEX:  %s\n", s);
             JULE_FREE(s);
             break;
+        case JULE_ERR_FILE_NOT_FOUND:
+        case JULE_ERR_FILE_IS_DIR:
+        case JULE_ERR_MMAP_FAILED:
+            fprintf(stderr, "    PATH:   %s\n", info->path);
+            break;
         default:
             break;
     }
