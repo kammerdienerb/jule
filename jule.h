@@ -1933,7 +1933,7 @@ static Jule_Status jule_args(Jule_Interp *interp, Jule_Value *tree, const char *
 
     count = 0;
     for (i = 0; i < strlen(legend); i += 1) {
-        count += legend[i] != '-';
+        count += legend[i] != '-' && legend[i] != '!';
     }
 
     i         = 0;
@@ -3152,12 +3152,24 @@ static Jule_Status jule_builtin_dot(Jule_Interp *interp, Jule_Value *tree, Jule_
     Jule_Status  status;
     Jule_Value  *first;
     Jule_Value  *second;
+    Jule_Value  *tmp;
     Jule_Value  *list;
 
     status = jule_args(interp, tree, "**", values, &first, &second);
     if (status != JULE_SUCCESS) {
         *result = NULL;
         goto out;
+    }
+
+    if (first->in_symtab) {
+        tmp = jule_copy_force(first);
+        jule_free_value(first);
+        first = tmp;
+    }
+    if (second->in_symtab) {
+        tmp = jule_copy_force(second);
+        jule_free_value(second);
+        second = tmp;
     }
 
     list = jule_list_value();
@@ -3393,6 +3405,33 @@ static Jule_Status jule_builtin_append(Jule_Interp *interp, Jule_Value *tree, Ju
     jule_push(&list->list, val);
 
     *result = list;
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_pop(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *list;
+
+    status = jule_args(interp, tree, "l", values, &list);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    if (list->list.len <= 0) {
+        status = JULE_ERR_BAD_INDEX;
+        jule_make_bad_index_error(interp, tree->line, jule_number_value(-1));
+        *result = NULL;
+        goto out_free;
+    }
+
+    *result = jule_last(&list->list);
+    jule_pop(&list->list);
+
+out_free:;
+    jule_free_value(list);
 
 out:;
     return status;
@@ -3759,6 +3798,7 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     jule_install_fn(interp, "elem",          jule_builtin_elem);
     jule_install_fn(interp, "index",         jule_builtin_index);
     jule_install_fn(interp, "append",        jule_builtin_append);
+    jule_install_fn(interp, "pop",           jule_builtin_pop);
     jule_install_fn(interp, "object",        jule_builtin_object);
     jule_install_fn(interp, "in",            jule_builtin_in);
     jule_install_fn(interp, "field",         jule_builtin_field);
