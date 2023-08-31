@@ -257,7 +257,7 @@ static inline void jule_pop(Jule_Array *array) {
 }
 
 static inline void jule_erase(Jule_Array *array, unsigned idx) {
-    if (idx < 0 || idx >= array->len) {
+    if (idx >= array->len) {
         return;
     }
 
@@ -267,7 +267,7 @@ static inline void jule_erase(Jule_Array *array, unsigned idx) {
 }
 
 static inline void *jule_elem(Jule_Array *array, unsigned idx) {
-    if (idx < 0 || idx >= array->len) {
+    if (idx >= array->len) {
         return NULL;
     }
 
@@ -282,7 +282,7 @@ static inline void *jule_last(Jule_Array *array) {
     return jule_elem(array, array->len - 1);
 }
 
-#define FOR_EACH(_arrayp, _it) for (unsigned _each_i = 0; (((_arrayp)->len && ((_it) = (_arrayp)->data[_each_i])), _each_i < (_arrayp)->len); _each_i += 1)
+#define FOR_EACH(_arrayp, _it) for (unsigned _each_i = 0; (((_it) = (_arrayp)->data[_each_i])), _each_i < (_arrayp)->len; _each_i += 1)
 
 struct Jule_Value_Struct {
     union {
@@ -618,7 +618,8 @@ typedef char *Char_Ptr;
     }                                                                                        \
                                                                                              \
     static inline hash_table(K_T, V_T)                                                       \
-    CAT2(hash_table(K_T, V_T), _make)(CAT2(hash_table(K_T, V_T), _hash_t) hash, void *equ) { \
+    CAT2(hash_table(K_T, V_T), _make)(CAT2(hash_table(K_T, V_T), _hash_t) hash,              \
+                                      CAT2(hash_table(K_T, V_T), _equ_t)equ) {               \
         hash_table(K_T, V_T) t = JULE_MALLOC(sizeof(*t));                                    \
                                                                                              \
         uint64_t data_size                                                                   \
@@ -870,7 +871,7 @@ Jule_Value *jule_object_value(void) {
     value = _jule_value();
 
     value->type   = JULE_OBJECT;
-    value->object = hash_table_make_e(Jule_Value_Ptr, Jule_Value_Ptr, jule_valhash, (void*)jule_equal);
+    value->object = hash_table_make_e(Jule_Value_Ptr, Jule_Value_Ptr, jule_valhash, jule_equal);
 
     return value;
 }
@@ -997,7 +998,7 @@ static Jule_Value *_jule_copy(Jule_Value *value, int force) {
             break;
         case JULE_OBJECT:
             obj = copy->object;
-            copy->object = hash_table_make_e(Jule_Value_Ptr, Jule_Value_Ptr, jule_valhash, (void*)jule_equal);
+            copy->object = hash_table_make_e(Jule_Value_Ptr, Jule_Value_Ptr, jule_valhash, jule_equal);
             hash_table_traverse(obj, key, val) {
                 hash_table_insert((_Jule_Object)copy->object, _jule_copy(key, force), _jule_copy(*val, force));
             }
@@ -1458,6 +1459,10 @@ static void _jule_string_print(char **buff, int *len, int *cap, Jule_Value *valu
     Jule_Value  *child;
     Jule_Value  *key;
     Jule_Value **val;
+    union {
+        Jule_Fn  f;
+        void    *v;
+    }            prfn;
 
 #define PUSHC(_c)                               \
 do {                                            \
@@ -1537,7 +1542,8 @@ do {                                            \
             }
             break;
         case _JULE_BUILTIN_FN:
-            snprintf(b, sizeof(b), "<fn@%p>", (void*)value->builtin_fn);
+            prfn.f = value->builtin_fn;
+            snprintf(b, sizeof(b), "<fn@%p>", prfn.v);
             PUSHS(b);
             break;
         default:
@@ -1761,7 +1767,7 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
         }
 
         save_symtab  = interp->local_symtab;
-        local_symtab = hash_table_make_e(Char_Ptr, Jule_Value_Ptr, jule_charptr_hash, (void*)jule_charptr_equ);
+        local_symtab = hash_table_make_e(Char_Ptr, Jule_Value_Ptr, jule_charptr_hash, jule_charptr_equ);
 
         i = 0;
         FOR_EACH(&arg_syms, arg_sym) {
@@ -1794,6 +1800,7 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
 
 out_cleanup_locals:;
         hash_table_traverse(local_symtab, key, vit) {
+            (void)vit;
             jule_uninstall_local(interp, key);
         }
         hash_table_free(local_symtab);
@@ -2759,7 +2766,7 @@ static Jule_Status jule_builtin_fmt(Jule_Interp *interp, Jule_Value *tree, Jule_
     last = 0;
     for (i = 0; i < fmt->string.len; i += 1) {
         c     = fmt->string.chars[i];
-        n    += (c == '%' & last != '\\');
+        n    += ((c == '%') & (last != '\\'));
         last  = c;
     }
 
@@ -3072,6 +3079,7 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
     } else {
         i = 0;
         hash_table_traverse((_Jule_Object)container->object, it, val) {
+            (void)val;
             jule_install_local(interp, sym->symbol, it);
 
             status = jule_eval(interp, expr, &ev);
@@ -3602,6 +3610,7 @@ static Jule_Status jule_builtin_keys(Jule_Interp *interp, Jule_Value *tree, Jule
 
     list = jule_list_value();
     hash_table_traverse((_Jule_Object)object->object, key, val) {
+        (void)val;
         jule_push(&list->list, jule_copy_force(key));
     }
 
@@ -3628,6 +3637,7 @@ static Jule_Status jule_builtin_values(Jule_Interp *interp, Jule_Value *tree, Ju
 
     list = jule_list_value();
     hash_table_traverse((_Jule_Object)object->object, key, val) {
+        (void)key;
         jule_push(&list->list, jule_copy_force(*val));
     }
 
@@ -3758,8 +3768,8 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     memset(interp, 0, sizeof(*interp));
 
     interp->roots        = JULE_ARRAY_INIT;
-    interp->symtab       = hash_table_make_e(Char_Ptr, Jule_Value_Ptr, jule_charptr_hash, (void*)jule_charptr_equ);
-    interp->local_symtab = hash_table_make_e(Char_Ptr, Jule_Value_Ptr, jule_charptr_hash, (void*)jule_charptr_equ);
+    interp->symtab       = hash_table_make_e(Char_Ptr, Jule_Value_Ptr, jule_charptr_hash, jule_charptr_equ);
+    interp->local_symtab = hash_table_make_e(Char_Ptr, Jule_Value_Ptr, jule_charptr_hash, jule_charptr_equ);
 
     jule_install_fn(interp, "set",           jule_builtin_set);
     jule_install_fn(interp, "local",         jule_builtin_local);
