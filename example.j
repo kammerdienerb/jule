@@ -118,5 +118,5 @@ fn
 println
     fact 6
 
-eval-file "test.j"
+eval-file "foo.j"
 test:foo
