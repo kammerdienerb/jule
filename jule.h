@@ -282,7 +282,7 @@ static inline void *jule_last(Jule_Array *array) {
     return jule_elem(array, array->len - 1);
 }
 
-#define FOR_EACH(_arrayp, _it) for (unsigned _each_i = 0; (((_it) = (_arrayp)->len ? (_arrayp)->data[_each_i] : NULL), _each_i < (_arrayp)->len); _each_i += 1)
+#define FOR_EACH(_arrayp, _it) for (unsigned _each_i = 0; (((_it) = (_each_i < (_arrayp)->len ? (_arrayp)->data[_each_i] : NULL)), (_it) != NULL); _each_i += 1)
 
 struct Jule_Value_Struct {
     union {
@@ -1725,7 +1725,7 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
     _Jule_Symbol_Table   save_symtab;
     _Jule_Symbol_Table   local_symtab;
     int                  i;
-    Jule_Array           arg_syms;
+    Jule_Array           syms;
     Jule_Value          *arg_sym;
     Jule_Value          *arg_val;
     char                *key;
@@ -1745,13 +1745,13 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
         def_tree = jule_elem(&fn->eval_values, 1);
 
         if (def_tree->type == _JULE_TREE) {
-            arg_syms.data = def_tree->eval_values.data + 1;
-            arg_syms.len  = def_tree->eval_values.len  - 1;
-            arg_syms.cap  = 0;
+            syms.data = def_tree->eval_values.data + 1;
+            syms.len  = def_tree->eval_values.len  - 1;
+            syms.cap  = 0;
         } else if (def_tree->type == JULE_SYMBOL) {
-            arg_syms.data = NULL;
-            arg_syms.len  = 0;
-            arg_syms.cap  = 0;
+            syms.data = NULL;
+            syms.len  = 0;
+            syms.cap  = 0;
         } else {
             status = JULE_ERR_TYPE;
             jule_make_type_error(interp, def_tree->line, JULE_SYMBOL, def_tree->type);
@@ -1759,9 +1759,9 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
             goto out;
         }
 
-        if (values.len != arg_syms.len) {
+        if (values.len != syms.len) {
             status = JULE_ERR_ARITY;
-            jule_make_arity_error(interp, tree->line, arg_syms.len, values.len, 0);
+            jule_make_arity_error(interp, tree->line, syms.len, values.len, 0);
             *result = NULL;
             goto out;
         }
@@ -1770,7 +1770,7 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
         local_symtab = hash_table_make_e(Char_Ptr, Jule_Value_Ptr, jule_charptr_hash, jule_charptr_equ);
 
         i = 0;
-        FOR_EACH(&arg_syms, arg_sym) {
+        FOR_EACH(&syms, arg_sym) {
             assert(arg_sym->type == JULE_SYMBOL);
 
             status = jule_eval(interp, jule_elem(&values, i), &arg_val);
@@ -1799,10 +1799,15 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
         }
 
 out_cleanup_locals:;
+        syms = JULE_ARRAY_INIT;
         hash_table_traverse(local_symtab, key, vit) {
             (void)vit;
+            jule_push(&syms, key);
+        }
+        FOR_EACH(&syms, key) {
             jule_uninstall_local(interp, key);
         }
+        jule_free_array(&syms);
         hash_table_free(local_symtab);
 
         interp->local_symtab = save_symtab;
@@ -3850,7 +3855,6 @@ out:;
 void jule_free(Jule_Interp *interp) {
     Jule_Value  *it;
     char        *key;
-    char        *real_key;
     Jule_Value **val;
 
     FOR_EACH(&interp->roots, it) {
@@ -3859,8 +3863,7 @@ void jule_free(Jule_Interp *interp) {
     jule_free_array(&interp->roots);
 
     hash_table_traverse(interp->symtab, key, val) {
-        real_key = *hash_table_get_key(interp->symtab, key);
-        JULE_FREE(real_key);
+        JULE_FREE(key);
         (*val)->in_symtab = 0;
         jule_free_value(*val);
     }
@@ -3873,7 +3876,6 @@ void jule_free(Jule_Interp *interp) {
     memset(interp, 0, sizeof(*interp));
 }
 
-#undef IND_LEVEL
 #undef STATUS_ERR_RET
 #undef PARSE_ERR_RET
 #undef MORE_INPUT
