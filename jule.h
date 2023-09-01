@@ -4009,11 +4009,8 @@ out:;
 }
 
 static Jule_Status jule_builtin_len(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
-    Jule_Array   eval;
     Jule_Status  status;
     Jule_Value  *ev;
-
-    memset(&eval, 0, sizeof(eval));
 
     status = jule_args(interp, tree, "*", values, &ev);
     if (status != JULE_SUCCESS) {
@@ -4049,6 +4046,28 @@ static Jule_Status jule_builtin_len(Jule_Interp *interp, Jule_Value *tree, Jule_
         default:
             assert(0);
             break;
+    }
+
+    jule_free_value(ev);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_empty(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *ev;
+
+    status = jule_args(interp, tree, "#", values, &ev);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    if (ev->type == JULE_LIST) {
+        *result = jule_number_value(ev->list.len == 0);
+    } else if (ev->type == JULE_OBJECT) {
+        *result = jule_number_value(hash_table_len((_Jule_Object)ev->object) == 0);
     }
 
     jule_free_value(ev);
@@ -4111,6 +4130,7 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     jule_install_fn(interp, "update-object", jule_builtin_update_object);
     jule_install_fn(interp, "erase",         jule_builtin_erase);
     jule_install_fn(interp, "len",           jule_builtin_len);
+    jule_install_fn(interp, "empty",         jule_builtin_empty);
     jule_install_fn(interp, "keys",          jule_builtin_keys);
     jule_install_fn(interp, "values",        jule_builtin_values);
     jule_install_fn(interp, "eval-file",     jule_builtin_eval_file);
