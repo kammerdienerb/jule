@@ -3677,8 +3677,11 @@ static Jule_Status jule_builtin_pop(Jule_Interp *interp, Jule_Value *tree, Jule_
         goto out_free;
     }
 
-    *result = jule_last(&list->list);
-    jule_pop(&list->list);
+    *result = jule_pop(&list->list);
+    (*result)->in_symtab      = 0;
+    (*result)->local          = 0;
+    (*result)->borrow_count   = 0;
+    (*result)->borrower_count = 0;
 
 out_free:;
     jule_free_value(list);
