@@ -282,7 +282,10 @@ static inline void *jule_last(Jule_Array *array) {
     return jule_elem(array, array->len - 1);
 }
 
-#define FOR_EACH(_arrayp, _it) for (unsigned _each_i = 0; (((_it) = (_each_i < (_arrayp)->len ? (_arrayp)->data[_each_i] : NULL)), (_it) != NULL); _each_i += 1)
+#define FOR_EACH(_arrayp, _it)                                                                               \
+    for (unsigned _each_i = 0;                                                                               \
+         (((_it) = (_each_i < (_arrayp)->len ? (_arrayp)->data[_each_i] : NULL)), _each_i < (_arrayp)->len); \
+         _each_i += 1)
 
 struct Jule_Value_Struct {
     union {
