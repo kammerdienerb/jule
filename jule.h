@@ -3096,8 +3096,15 @@ static Jule_Status jule_builtin_do(Jule_Interp *interp, Jule_Value *tree, Jule_A
             goto out;
         }
 
-        jule_free_value(*result);
-        *result = ev;
+        if (it == jule_last(&values)) {
+            *result = ev;
+        } else {
+            jule_free_value(ev);
+        }
+    }
+
+    if (*result == NULL) {
+        *result = jule_nil_value();
     }
 
 out:;
