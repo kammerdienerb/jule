@@ -1,22 +1,23 @@
 #ifndef __JULE_H__
 #define __JULE_H__
 
-#define _JULE_STATUS                                                                       \
-    _JULE_STATUS_X(JULE_SUCCESS,                    "No error.")                           \
-    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_EOS,         "Unexpected end of input.")            \
-    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_TOK,         "Unexpected token.")                   \
-    _JULE_STATUS_X(JULE_ERR_NO_INPUT,               "Missing a top-level expression.")     \
-    _JULE_STATUS_X(JULE_ERR_LOOKUP,                 "Failed to find symbol.")              \
-    _JULE_STATUS_X(JULE_ERR_NOT_A_FN,               "Invoked value is not a function.")    \
-    _JULE_STATUS_X(JULE_ERR_ARITY,                  "Incorrect number of arguments.")      \
-    _JULE_STATUS_X(JULE_ERR_TYPE,                   "Incorrect argument type.")            \
-    _JULE_STATUS_X(JULE_ERR_OBJECT_KEY_TYPE,        "Expression is not a valid key type.") \
-    _JULE_STATUS_X(JULE_ERR_MISSING_VAL,            "Missing value expression.")           \
-    _JULE_STATUS_X(JULE_ERR_BAD_INDEX,              "Field or element not found.")         \
-    _JULE_STATUS_X(JULE_ERR_EVAL_CANCELLED,         "Evaluation was cancelled.")           \
-    _JULE_STATUS_X(JULE_ERR_FILE_NOT_FOUND,         "File not found.")                     \
-    _JULE_STATUS_X(JULE_ERR_FILE_IS_DIR,            "File is a directory.")                \
-    _JULE_STATUS_X(JULE_ERR_MMAP_FAILED,            "mmap() failed.")
+#define _JULE_STATUS                                                                                                  \
+    _JULE_STATUS_X(JULE_SUCCESS,                    "No error.")                                                      \
+    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_EOS,         "Unexpected end of input.")                                       \
+    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_TOK,         "Unexpected token.")                                              \
+    _JULE_STATUS_X(JULE_ERR_NO_INPUT,               "Missing a top-level expression.")                                \
+    _JULE_STATUS_X(JULE_ERR_LOOKUP,                 "Failed to find symbol.")                                         \
+    _JULE_STATUS_X(JULE_ERR_NOT_A_FN,               "Invoked value is not a function.")                               \
+    _JULE_STATUS_X(JULE_ERR_ARITY,                  "Incorrect number of arguments.")                                 \
+    _JULE_STATUS_X(JULE_ERR_TYPE,                   "Incorrect argument type.")                                       \
+    _JULE_STATUS_X(JULE_ERR_OBJECT_KEY_TYPE,        "Expression is not a valid key type.")                            \
+    _JULE_STATUS_X(JULE_ERR_MISSING_VAL,            "Missing value expression.")                                      \
+    _JULE_STATUS_X(JULE_ERR_BAD_INDEX,              "Field or element not found.")                                    \
+    _JULE_STATUS_X(JULE_ERR_EVAL_CANCELLED,         "Evaluation was cancelled.")                                      \
+    _JULE_STATUS_X(JULE_ERR_FILE_NOT_FOUND,         "File not found.")                                                \
+    _JULE_STATUS_X(JULE_ERR_FILE_IS_DIR,            "File is a directory.")                                           \
+    _JULE_STATUS_X(JULE_ERR_MMAP_FAILED,            "mmap() failed.")                                                 \
+    _JULE_STATUS_X(JULE_ERR_RELEASE_WHILE_BORROWED, "Value released while a borrowed reference remains outstanding.")
 
 #define _JULE_STATUS_X(e, s) e,
 typedef enum { _JULE_STATUS } Jule_Status;
@@ -287,6 +288,34 @@ static inline void *jule_last(Jule_Array *array) {
          (((_it) = (_each_i < (_arrayp)->len ? (_arrayp)->data[_each_i] : NULL)), _each_i < (_arrayp)->len); \
          _each_i += 1)
 
+#define JULE_MAX_LINE_POT         (20)
+#define JULE_MAX_IND_POT          ((32) - JULE_MAX_LINE_POT)
+#define JULE_MAX_BORROW_COUNT_POT (10)
+
+#define JULE_BORROW(_value)                                               \
+do {                                                                      \
+    assert((_value)->borrow_count < (1u << JULE_MAX_BORROW_COUNT_POT));   \
+    (_value)->borrow_count += 1;                                          \
+} while (0)
+
+#define JULE_UNBORROW(_value)                                             \
+do {                                                                      \
+    assert((_value)->borrow_count > 0);                                   \
+    (_value)->borrow_count -= 1;                                          \
+} while (0)
+
+#define JULE_BORROWER(_value)                                             \
+do {                                                                      \
+    assert((_value)->borrower_count < (1u << JULE_MAX_BORROW_COUNT_POT)); \
+    (_value)->borrower_count += 1;                                        \
+} while (0)
+
+#define JULE_UNBORROWER(_value)                                           \
+do {                                                                      \
+    assert((_value)->borrower_count > 0);                                 \
+    (_value)->borrower_count -= 1;                                        \
+} while (0)
+
 struct Jule_Value_Struct {
     union {
         unsigned long long  _integer;
@@ -298,12 +327,14 @@ struct Jule_Value_Struct {
         Jule_Array          eval_values;
         Jule_Fn             builtin_fn;
     };
-    unsigned                type      :  4;
-    unsigned                in_symtab :  1;
-    unsigned                local     :  1;
-    unsigned                code      :  1;
-    unsigned                ind_level :  9;
-    unsigned                line      : 16;
+    unsigned                type           :                         4;
+    unsigned                in_symtab      :                         1;
+    unsigned                local          :                         1;
+    unsigned                code           :                         1;
+    unsigned                borrow_count   : JULE_MAX_BORROW_COUNT_POT;
+    unsigned                borrower_count : JULE_MAX_BORROW_COUNT_POT;
+    unsigned                line           :         JULE_MAX_LINE_POT;
+    unsigned                ind_level      :          JULE_MAX_IND_POT;
 };
 
 typedef struct Jule_Parse_Context_Struct {
@@ -884,7 +915,9 @@ static void jule_free_value(Jule_Value *value) {
     Jule_Value  *key;
     Jule_Value **val;
 
-    if (value->in_symtab || value->code) { return; }
+    assert(!value->borrow_count);
+
+    if (value->borrower_count || value->in_symtab || value->code) { return; }
 
     switch (value->type) {
         case JULE_NIL:
@@ -1075,6 +1108,8 @@ static int jule_equal(Jule_Value *a, Jule_Value *b) {
 static void jule_error(Jule_Interp *interp, Jule_Error_Info *info) {
     if (interp->error_callback != NULL) {
         interp->error_callback(info);
+    } else {
+        jule_free_error_info(info);
     }
 }
 
@@ -1175,6 +1210,17 @@ static void jule_make_file_error(Jule_Interp *interp, int line, Jule_Status stat
     info.location.col  = 0;
     if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
     info.path          = jule_charptr_dup(path);
+    jule_error(interp, &info);
+}
+
+static void jule_make_install_error(Jule_Interp *interp, int line, Jule_Status status, const char *sym) {
+    Jule_Error_Info info;
+    memset(&info, 0, sizeof(info));
+    info.status        = status;
+    info.location.line = line;
+    info.location.col  = 0;
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    info.sym           = jule_charptr_dup(sym);
     jule_error(interp, &info);
 }
 
@@ -1651,7 +1697,13 @@ static Jule_Status jule_install_common(Jule_Interp *interp, _Jule_Symbol_Table s
     if (lookup != NULL) {
         if (*lookup != val) {
             (*lookup)->in_symtab = 0;
-            jule_free_value(*lookup);
+            if (!(*lookup)->borrower_count) {
+
+                if ((*lookup)->borrow_count) {
+                    return JULE_ERR_RELEASE_WHILE_BORROWED;
+                }
+                jule_free_value(*lookup);
+            }
             *lookup = val;
         }
     } else {
@@ -1679,7 +1731,14 @@ static Jule_Status jule_uninstall_common(Jule_Interp *interp, _Jule_Symbol_Table
     hash_table_delete(symtab, key);
 
     val->in_symtab = 0;
+
+    do_free = do_free && (val->borrower_count == 0);
+
     if (do_free) {
+        if (val->borrow_count) {
+            return JULE_ERR_RELEASE_WHILE_BORROWED;
+        }
+
         jule_free_value(val);
     }
     JULE_FREE(key);
@@ -1782,7 +1841,12 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
                 goto out_cleanup_locals;
             }
 
-            jule_install_common(interp, local_symtab, arg_sym->symbol, jule_copy_force(arg_val), 1);
+            status = jule_install_common(interp, local_symtab, arg_sym->symbol, jule_copy_force(arg_val), 1);
+            if (status != JULE_SUCCESS) {
+                *result = NULL;
+                jule_make_install_error(interp, arg_val->line, status, arg_sym->symbol);
+                goto out_cleanup_locals;
+            }
 
             i += 1;
         }
@@ -1808,7 +1872,12 @@ out_cleanup_locals:;
             jule_push(&syms, key);
         }
         FOR_EACH(&syms, key) {
-            jule_uninstall_local(interp, key);
+            status = jule_uninstall_local(interp, key);
+            if (status != JULE_SUCCESS) {
+                *result = NULL;
+                jule_make_install_error(interp, tree->line, status, key);
+                goto out;
+            }
         }
         jule_free_array(&syms);
         hash_table_free(local_symtab);
@@ -2067,7 +2136,12 @@ static Jule_Status jule_builtin_set(Jule_Interp *interp, Jule_Value *tree, Jule_
         val = cpy;
     }
 
-    jule_install_var(interp, sym->symbol, val);
+    status = jule_install_var(interp, sym->symbol, val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        jule_make_install_error(interp, tree->line, status, sym->symbol);
+        goto out;
+    }
 
     *result = sym;
 
@@ -2093,7 +2167,12 @@ static Jule_Status jule_builtin_local(Jule_Interp *interp, Jule_Value *tree, Jul
         val = cpy;
     }
 
-    jule_install_local(interp, sym->symbol, val);
+    status = jule_install_local(interp, sym->symbol, val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        jule_make_install_error(interp, tree->line, status, sym->symbol);
+        goto out;
+    }
 
     *result = sym;
 
@@ -2119,7 +2198,12 @@ static Jule_Status jule_builtin_eset(Jule_Interp *interp, Jule_Value *tree, Jule
         val = cpy;
     }
 
-    jule_install_var(interp, sym->symbol, val);
+    status = jule_install_var(interp, sym->symbol, val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        jule_make_install_error(interp, tree->line, status, sym->symbol);
+        goto out;
+    }
 
     *result = sym;
 
@@ -2145,7 +2229,12 @@ static Jule_Status jule_builtin_elocal(Jule_Interp *interp, Jule_Value *tree, Ju
         val = cpy;
     }
 
-    jule_install_local(interp, sym->symbol, val);
+    status = jule_install_local(interp, sym->symbol, val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        jule_make_install_error(interp, tree->line, status, sym->symbol);
+        goto out;
+    }
 
     *result = sym;
 
@@ -2193,7 +2282,12 @@ static Jule_Status jule_builtin_fn(Jule_Interp *interp, Jule_Value *tree, Jule_A
     fn       = jule_copy(tree);
     fn->type = _JULE_FN;
 
-    jule_install_var(interp, sym->symbol, fn);
+    status = jule_install_var(interp, sym->symbol, fn);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        jule_make_install_error(interp, sym->line, status, sym->symbol);
+        goto out;
+    }
 
     *result = jule_copy(sym);
 
@@ -3009,7 +3103,12 @@ static Jule_Status jule_builtin_repeat(Jule_Interp *interp, Jule_Value *tree, Ju
 
     for (i = 0; i < iters; i += 1) {
         val = jule_number_value(i);
-        jule_install_local(interp, sym->symbol, val);
+        status = jule_install_local(interp, sym->symbol, val);
+        if (status != JULE_SUCCESS) {
+            *result = NULL;
+            jule_make_install_error(interp, sym->line, status, sym->symbol);
+            goto out;
+        }
 
         status = jule_eval(interp, _expr, &expr);
         if (status != JULE_SUCCESS) {
@@ -3025,9 +3124,18 @@ static Jule_Status jule_builtin_repeat(Jule_Interp *interp, Jule_Value *tree, Ju
         }
 
         if (*result == val) {
-            jule_uninstall_local_no_free(interp, sym->symbol);
+            status = jule_uninstall_local_no_free(interp, sym->symbol);
         } else {
-            jule_uninstall_local(interp, sym->symbol);
+            status = jule_uninstall_local(interp, sym->symbol);
+        }
+
+        if (status != JULE_SUCCESS) {
+            if (*result != NULL) {
+                jule_free_value(*result);
+            }
+            *result = NULL;
+            jule_make_install_error(interp, sym->line, status, sym->symbol);
+            goto out_free;
         }
     }
 
@@ -3062,12 +3170,21 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
         goto out;
     }
 
+    JULE_BORROW(container);
+
     if (container->type == JULE_LIST) {
         FOR_EACH(&container->list, it) {
-            jule_install_local(interp, sym->symbol, it);
+            JULE_BORROWER(it);
+            status = jule_install_local(interp, sym->symbol, it);
+            if (status != JULE_SUCCESS) {
+                *result = NULL;
+                jule_make_install_error(interp, sym->line, status, sym->symbol);
+                goto out_free;
+            }
 
             status = jule_eval(interp, expr, &ev);
             if (status != JULE_SUCCESS) {
+                JULE_UNBORROWER(it);
                 jule_uninstall_local_no_free(interp, sym->symbol);
                 *result = NULL;
                 goto out_free;
@@ -3079,19 +3196,33 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
                 jule_free_value(ev);
             }
 
-            jule_uninstall_local_no_free(interp, sym->symbol);
+            JULE_UNBORROWER(it);
+            status = jule_uninstall_local_no_free(interp, sym->symbol);
+            if (status != JULE_SUCCESS) {
+                *result = NULL;
+                jule_make_install_error(interp, sym->line, status, sym->symbol);
+                goto out_free;
+            }
 
             /* Restore symtab flag, which would have been wiped on uninstall. */
             it->in_symtab = container->in_symtab;
         }
+
     } else {
         i = 0;
         hash_table_traverse((_Jule_Object)container->object, it, val) {
             (void)val;
-            jule_install_local(interp, sym->symbol, it);
+            JULE_BORROWER(it);
+            status = jule_install_local(interp, sym->symbol, it);
+            if (status != JULE_SUCCESS) {
+                *result = NULL;
+                jule_make_install_error(interp, sym->line, status, sym->symbol);
+                goto out_free;
+            }
 
             status = jule_eval(interp, expr, &ev);
             if (status != JULE_SUCCESS) {
+                JULE_UNBORROWER(it);
                 jule_uninstall_local_no_free(interp, sym->symbol);
                 *result = NULL;
                 goto out_free;
@@ -3105,7 +3236,13 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
                 jule_free_value(ev);
             }
 
-            jule_uninstall_local_no_free(interp, sym->symbol);
+            JULE_UNBORROWER(it);
+            status = jule_uninstall_local_no_free(interp, sym->symbol);
+            if (status != JULE_SUCCESS) {
+                *result = NULL;
+                jule_make_install_error(interp, sym->line, status, sym->symbol);
+                goto out_free;
+            }
 
             /* Restore symtab flag, which would have been wiped on uninstall. */
             it->in_symtab = container->in_symtab;
@@ -3117,6 +3254,8 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
     }
 
 out_free:;
+    JULE_UNBORROW(container);
+
     jule_free_value(sym);
     jule_free_value(container);
     jule_free_value(expr);

@@ -55,6 +55,7 @@ static void on_jule_error(Jule_Error_Info *info) {
     }
     switch (status) {
         case JULE_ERR_LOOKUP:
+        case JULE_ERR_RELEASE_WHILE_BORROWED:
             fprintf(stderr, "    SYMBOL: %s\n", info->sym);
             break;
         case JULE_ERR_ARITY:
