@@ -2337,6 +2337,59 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_localfn(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *def_tree;
+    Jule_Value  *it;
+    Jule_Value  *sym;
+    Jule_Value  *fn;
+
+    status = JULE_SUCCESS;
+
+    if (values.len != 2) {
+        status = JULE_ERR_ARITY;
+        jule_make_arity_error(interp, tree->line, 2, values.len, 0);
+        *result = NULL;
+        goto out;
+    }
+
+    def_tree = jule_elem(&values, 0);
+
+    if (def_tree->type == _JULE_TREE) {
+        FOR_EACH(&def_tree->eval_values, it) {
+            if (it->type != JULE_SYMBOL) {
+                status = JULE_ERR_TYPE;
+                jule_make_type_error(interp, def_tree->line, JULE_SYMBOL, it->type);
+                *result = NULL;
+                goto out;
+            }
+        }
+        sym = jule_elem(&def_tree->eval_values, 0);
+    } else if (def_tree->type == JULE_SYMBOL) {
+        sym = def_tree;
+    } else {
+        status = JULE_ERR_TYPE;
+        jule_make_type_error(interp, def_tree->line, JULE_SYMBOL, def_tree->type);
+        *result = NULL;
+        goto out;
+    }
+
+    fn       = jule_copy(tree);
+    fn->type = _JULE_FN;
+
+    status = jule_install_local(interp, sym->symbol, fn);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        jule_make_install_error(interp, sym->line, status, sym->symbol);
+        goto out;
+    }
+
+    *result = jule_copy(sym);
+
+out:;
+    return status;
+}
+
 static Jule_Status jule_builtin_id(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *value;
@@ -3964,6 +4017,7 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     jule_install_fn(interp, "eset",          jule_builtin_eset);
     jule_install_fn(interp, "elocal",        jule_builtin_elocal);
     jule_install_fn(interp, "fn",            jule_builtin_fn);
+    jule_install_fn(interp, "localfn",       jule_builtin_localfn);
     jule_install_fn(interp, "id",            jule_builtin_id);
     jule_install_fn(interp, "quote",         jule_builtin_quote);
     jule_install_fn(interp, "+",             jule_builtin_add);
