@@ -3596,6 +3596,7 @@ static Jule_Status jule_builtin_elem(Jule_Interp *interp, Jule_Value *tree, Jule
 
     val = jule_elem(&list->list, i);
     val->in_symtab = list->in_symtab;
+    val->local     = list->local;
 
     *result = jule_copy(val);
 
@@ -3736,6 +3737,7 @@ static Jule_Status jule_builtin_field(Jule_Interp *interp, Jule_Value *tree, Jul
         goto out_free_key;
     } else {
         field->in_symtab = object->in_symtab;
+        field->local     = object->local;
         *result = jule_copy(field);
     }
 
