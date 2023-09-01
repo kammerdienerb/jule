@@ -110,7 +110,6 @@ fn
                 - n 1
             fib
                 - n 2
-
 println
     fib 6
 
