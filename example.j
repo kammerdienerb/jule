@@ -93,6 +93,13 @@ println "-----------"
 delete OBJ "foo"
 println OBJ
 println "-----------"
+
+
+foreach i
+    list 1 2 3 4 5 6 7 8 9
+    println i
+
+
 fn
     fib n
     if
