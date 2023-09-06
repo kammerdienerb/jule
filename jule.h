@@ -3036,7 +3036,7 @@ static Jule_Status jule_builtin_fmt(Jule_Interp *interp, Jule_Value *tree, Jule_
         len += strlen(s);
     }
 
-    formatted = JULE_MALLOC(len);
+    formatted = JULE_MALLOC(len + 1);
     ins       = formatted;
 
     n    = 0;
@@ -3055,6 +3055,8 @@ static Jule_Status jule_builtin_fmt(Jule_Interp *interp, Jule_Value *tree, Jule_
         }
         last = c;
     }
+
+    formatted[len] = 0;
 
     *result = jule_string_value_consume(formatted);
 
