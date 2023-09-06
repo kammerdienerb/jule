@@ -1693,7 +1693,7 @@ static void jule_push_local_symtab(Jule_Interp *interp, _Jule_Symbol_Table local
     jule_push(&interp->local_symtab_stack, local_symtab);
 }
 
-static Jule_Status _jule_pop_local_symtab(Jule_Interp *interp, Jule_Value *tree, int report_errors) {
+static Jule_Status jule_pop_local_symtab(Jule_Interp *interp, Jule_Value *tree) {
     Jule_Status          status;
     _Jule_Symbol_Table   local_symtab;
     Jule_Array           syms = JULE_ARRAY_INIT;
@@ -1713,7 +1713,7 @@ static Jule_Status _jule_pop_local_symtab(Jule_Interp *interp, Jule_Value *tree,
     }
     FOR_EACH(&syms, key) {
         status = jule_uninstall_local(interp, key);
-        if (report_errors && status != JULE_SUCCESS) {
+        if (status != JULE_SUCCESS) {
             jule_make_install_error(interp, tree == NULL ? 0 : tree->line, status, key);
             goto out;
         }
@@ -1725,14 +1725,6 @@ static Jule_Status _jule_pop_local_symtab(Jule_Interp *interp, Jule_Value *tree,
 
 out:;
     return status;
-}
-
-static Jule_Status jule_pop_local_symtab(Jule_Interp *interp, Jule_Value *tree) {
-    return _jule_pop_local_symtab(interp, tree, 1);
-}
-
-static Jule_Status jule_pop_local_symtab_no_errors(Jule_Interp *interp, Jule_Value *tree) {
-    return _jule_pop_local_symtab(interp, tree, 0);
 }
 
 static _Jule_Symbol_Table jule_local_symtab(Jule_Interp *interp) {
@@ -2000,7 +1992,7 @@ static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value 
             switch (lookup->type) {
                 case JULE_SYMBOL:
                 case _JULE_TREE:
-                    jule_eval(interp, lookup, result);
+                    status = jule_eval(interp, lookup, result);
                     goto out;
                 case _JULE_FN:
                 case _JULE_BUILTIN_FN:
@@ -3088,12 +3080,12 @@ static Jule_Status jule_builtin_do(Jule_Interp *interp, Jule_Value *tree, Jule_A
         goto out;
     }
 
-    *result = jule_nil_value();
-
     FOR_EACH(&values, it) {
         status = jule_eval(interp, it, &ev);
         if (status != JULE_SUCCESS) {
-            jule_free_value(*result);
+            if (*result != NULL) {
+                jule_free_value(*result);
+            }
             *result = NULL;
             goto out;
         }
@@ -4163,22 +4155,30 @@ out:;
     return status;
 }
 
-void jule_free(Jule_Interp *interp) {
-    Jule_Value  *it;
+static void jule_free_symtab(_Jule_Symbol_Table symtab) {
     char        *key;
     Jule_Value **val;
 
-    while (jule_local_symtab(interp)) {
-        jule_pop_local_symtab_no_errors(interp, NULL);
+    hash_table_traverse(symtab, key, val) {
+        (*val)->in_symtab = 0;
+        (*val)->borrow_count = 0;
+        jule_free_value_force(*val);
+        JULE_FREE(key);
+    }
+
+    hash_table_free(symtab);
+}
+
+void jule_free(Jule_Interp *interp) {
+    _Jule_Symbol_Table  symtab;
+    Jule_Value         *it;
+
+    while ((symtab = jule_pop(&interp->local_symtab_stack)) != NULL) {
+        jule_free_symtab(symtab);
     }
     jule_free_array(&interp->local_symtab_stack);
 
-    hash_table_traverse(interp->symtab, key, val) {
-        (*val)->in_symtab = 0;
-        jule_free_value(*val);
-        JULE_FREE(key);
-    }
-    hash_table_free(interp->symtab);
+    jule_free_symtab(interp->symtab);
 
     FOR_EACH(&interp->roots, it) {
         jule_free_value_force(it);
