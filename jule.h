@@ -916,6 +916,10 @@ Jule_Value *jule_object_value(void) {
     return value;
 }
 
+static inline int jule_value_is_freeable(Jule_Value *value) {
+    return !(value->borrower_count || value->borrow_count || value->in_symtab);
+}
+
 static void _jule_free_value(Jule_Value *value, int force) {
     Jule_Value  *child;
     Jule_Value  *key;
@@ -924,7 +928,7 @@ static void _jule_free_value(Jule_Value *value, int force) {
     assert((!force || !value->borrow_count)
     && "why are we forcing a free of a borrowed value?");
 
-    if (!force && (value->borrower_count || value->borrow_count || value->in_symtab)) { return; }
+    if (!force && !jule_value_is_freeable(value)) { return; }
 
 
     switch (value->type) {
@@ -987,6 +991,7 @@ void jule_insert(Jule_Value *object, Jule_Value *key, Jule_Value *val) {
 
     lookup = hash_table_get_val((_Jule_Object)object->object, key);
     if (lookup != NULL) {
+        assert(*lookup != val);
         jule_free_value(key);
         jule_free_value(*lookup);
         *lookup = val;
@@ -1748,6 +1753,8 @@ static Jule_Status jule_install_common(Jule_Interp *interp, _Jule_Symbol_Table s
 
     (void)interp;
 
+    assert(val->borrower_count || !val->in_symtab);
+
     lookup = hash_table_get_val(symtab, (char*)symbol);
     if (lookup != NULL) {
         if (*lookup != val) {
@@ -1790,7 +1797,6 @@ static Jule_Status jule_uninstall_common(Jule_Interp *interp, _Jule_Symbol_Table
 
     hash_table_delete(symtab, key);
 
-    val->in_symtab = 0;
 
     do_free = do_free && (val->borrower_count == 0);
 
@@ -1799,7 +1805,10 @@ static Jule_Status jule_uninstall_common(Jule_Interp *interp, _Jule_Symbol_Table
             return JULE_ERR_RELEASE_WHILE_BORROWED;
         }
 
+        val->in_symtab = 0;
         jule_free_value(val);
+    } else {
+        val->in_symtab = 0;
     }
     JULE_FREE(key);
 
@@ -3289,14 +3298,17 @@ out:;
 }
 
 static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
-    Jule_Status   status;
-    Jule_Value   *sym;
-    Jule_Value   *container;
-    Jule_Value   *expr;
-    Jule_Value   *it;
-    Jule_Value   *ev;
-    Jule_Value  **val;
-    unsigned      i;
+    Jule_Status          status;
+    Jule_Value          *sym;
+    Jule_Value          *container;
+    Jule_Value          *expr;
+    _Jule_Symbol_Table   symtab;
+    Jule_Value          *it;
+    Jule_Value          *ev;
+    char               **keyptr;
+    char                *key;
+    Jule_Value         **val;
+    unsigned             i;
 
     *result = NULL;
 
@@ -3307,6 +3319,9 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
     }
 
     JULE_BORROW(container);
+
+    symtab = jule_top(&interp->local_symtab_stack);
+    assert(symtab != NULL);
 
     if (container->type == JULE_LIST) {
         FOR_EACH(&container->list, it) {
@@ -3320,8 +3335,12 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
 
             status = jule_eval(interp, expr, &ev);
             if (status != JULE_SUCCESS) {
+                keyptr = hash_table_get_key(symtab, sym->symbol);
+                assert(keyptr != NULL);
+                key = *keyptr;
+                hash_table_delete(symtab, key);
+                JULE_FREE(key);
                 JULE_UNBORROWER(it);
-                jule_uninstall_local_no_free(interp, sym->symbol);
                 *result = NULL;
                 goto out_free;
             }
@@ -3342,9 +3361,6 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
                 jule_make_install_error(interp, sym->line, status, sym->symbol);
                 goto out_free;
             }
-
-            /* Restore symtab flag, which would have been wiped on uninstall. */
-            it->in_symtab = container->in_symtab;
         }
 
     } else {
@@ -3361,8 +3377,12 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
 
             status = jule_eval(interp, expr, &ev);
             if (status != JULE_SUCCESS) {
+                keyptr = hash_table_get_key(symtab, sym->symbol);
+                assert(keyptr != NULL);
+                key = *keyptr;
+                hash_table_delete(symtab, key);
+                JULE_FREE(key);
                 JULE_UNBORROWER(it);
-                jule_uninstall_local_no_free(interp, sym->symbol);
                 *result = NULL;
                 goto out_free;
             }
@@ -3385,15 +3405,13 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, J
                 jule_make_install_error(interp, sym->line, status, sym->symbol);
                 goto out_free;
             }
-
-            /* Restore symtab flag, which would have been wiped on uninstall. */
-            it->in_symtab = container->in_symtab;
         }
     }
 
     if (*result == NULL) {
         *result = jule_nil_value();
     }
+
 
 out_free:;
     JULE_UNBORROW(container);
@@ -4159,9 +4177,21 @@ static void jule_free_symtab(_Jule_Symbol_Table symtab) {
     char        *key;
     Jule_Value **val;
 
+    /* Remove all borrowers without freeing the values. They will be freed
+     * when the borrowed value is freed below. */
+again:;
     hash_table_traverse(symtab, key, val) {
-        (*val)->in_symtab = 0;
+        if ((*val)->borrower_count == 0) { continue; }
+
+        hash_table_delete(symtab, key);
+        JULE_FREE(key);
+        goto again;
+    }
+
+    hash_table_traverse(symtab, key, val) {
+        (*val)->in_symtab    = 0;
         (*val)->borrow_count = 0;
+        assert((*val)->borrower_count == 0);
         jule_free_value_force(*val);
         JULE_FREE(key);
     }
