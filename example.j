@@ -1,11 +1,9 @@
-fn
-    A arg
+fn (A arg)
     do
         println "in A" # I'm printing something
         println arg
 
-fn
-    B arg
+fn (B arg)
     do
         println arg
         A "bar"
@@ -26,20 +24,17 @@ println
             . 456 "b"
             . 789 "c"
 
-fn
-    true
+fn (true)
     do
         println "TRUE"
         1
 
-fn
-    false
+fn (false)
     do
         println "FALSE"
         0
 
-println
-    and true false
+println (and true false)
 
 if 0
      println "hi"
@@ -49,37 +44,31 @@ set my-object
     object
         . "test" 777
 
-fn
-    test object field
+fn (test object field)
     do
         println field
-        if
-            in object field
+        if (in object field)
             println "object has the field!"
             println "object does not have the field"
 
 test my-object "test"
 test my-object "foo"
 
-println
-    field my-object "test"
+println (field my-object "test")
 
 set i 0
 
-while
-    < i 10
+while (< i 10)
     do
         println "hi"
-        set i
-            + 1 i
+        set i (+ 1 i)
 
 set thing
     repeat i 0
         println "bye"
 println "-----------"
 println thing
-while
-    != nil thing
+while (!= nil thing)
     println "foo"
 
 set OBJ
@@ -95,34 +84,21 @@ println OBJ
 println "-----------"
 
 
-foreach i
-    list 1 2 3 4 5 6 7 8 9
+foreach i (list 1 2 3 4 5 6 7 8 9)
     println i
 
 
-fn
-    fib n
-    if
-        <= n 2
+fn (fib n)
+    if (<= n 2)
         != n 0
-        +
-            fib
-                - n 1
-            fib
-                - n 2
-println
-    fib 6
+        + (fib (- n 1)) (fib (- n 2))
+println (fib 6)
 
-fn
-    fact n
-    if
-        == 1 n
+fn (fact n)
+    if (== 1 n)
         n
-        *   n
-            fact
-                - n 1
-println
-    fact 6
+        * n (fact (- n 1))
+println (fact 6)
 
 eval-file "foo.j"
 test:foo
