@@ -4223,6 +4223,8 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     JULE_INSTALL_FN("pad",           jule_builtin_pad);
     JULE_INSTALL_FN("fmt",           jule_builtin_fmt);
     JULE_INSTALL_FN("do",            jule_builtin_do);
+    JULE_INSTALL_FN("then",          jule_builtin_do);
+    JULE_INSTALL_FN("else",          jule_builtin_do);
     JULE_INSTALL_FN("if",            jule_builtin_if);
     JULE_INSTALL_FN("while",         jule_builtin_while);
     JULE_INSTALL_FN("repeat",        jule_builtin_repeat);

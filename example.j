@@ -37,8 +37,8 @@ fn (false)
 println (and true false)
 
 if 0
-     println "hi"
-     println "bye"
+    then (println "hi")
+    else (println "bye")
 
 set my-object
     object
