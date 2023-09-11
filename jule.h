@@ -2174,6 +2174,8 @@ static Jule_Status jule_args(Jule_Interp *interp, Jule_Value *tree, const char *
     int           c;
     Jule_Value   *v;
     Jule_Value  **ve_ptr;
+    va_list       cleanup_args;
+    unsigned      j;
     Jule_Value   *cpy;
     int           t;
 
@@ -2218,6 +2220,13 @@ static Jule_Status jule_args(Jule_Interp *interp, Jule_Value *tree, const char *
         } else {
             status = jule_eval(interp, v, ve_ptr);
             if (status != JULE_SUCCESS) {
+                va_start(cleanup_args, values);
+                for (j = 0; j < i; j += 1) {
+                    ve_ptr = va_arg(cleanup_args, Jule_Value**);
+                    jule_free_value(*ve_ptr);
+                    *ve_ptr = NULL;
+                }
+                va_end(cleanup_args);
                 goto out;
             }
             if (deep_copy) {
@@ -4303,6 +4312,7 @@ void jule_free(Jule_Interp *interp) {
     jule_free_array(interp->roots);
 
     hash_table_traverse(interp->strings, key, id) {
+        (void)key;
         jule_free_string((Jule_String*)jule_get_string(interp, *id));
         JULE_FREE((void*)*id);
     }
