@@ -3242,7 +3242,7 @@ out:;
 static Jule_Status jule_builtin_if(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *cond;
-    int          which;
+    unsigned     which;
     Jule_Value  *then;
 
     status = JULE_SUCCESS;
@@ -3269,8 +3269,8 @@ static Jule_Status jule_builtin_if(Jule_Interp *interp, Jule_Value *tree, unsign
 
     which = 1 + (cond->number == 0);
 
-    then = values[which];
-    if (then != NULL) {
+    if (which < n_values) {
+        then   = values[which];
         status = jule_eval(interp, then, &then);
         if (status != JULE_SUCCESS) {
             *result = NULL;
