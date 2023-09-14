@@ -23,8 +23,8 @@ int main(int argc, char **argv) {
 
     jule_init_interp(&interp);
     jule_set_error_callback(&interp, on_jule_error);
+    interp.cur_file = jule_get_string_id(&interp, argv[1]);
     jule_parse(&interp, code, strlen(code));
-    interp.cur_file = jule_charptr_dup(argv[1]);
     jule_interp(&interp);
     jule_free(&interp);
 
@@ -39,7 +39,7 @@ static void on_jule_error(Jule_Error_Info *info) {
     status = info->status;
 
     fprintf(stderr, "%s:%u:%u: error: %s",
-            info->file == NULL ? "<input>" : info->file,
+            info->file == NULL ? "<?>" : info->file,
             info->location.line,
             info->location.col,
             jule_error_string(status));

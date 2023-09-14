@@ -591,9 +591,10 @@ static inline Jule_String jule_strdup(Jule_String *s) {
 
 
 struct Jule_Array_Struct {
-    unsigned   len;
-    unsigned   cap;
-    void      *data[];
+    unsigned    len;
+    unsigned    cap;
+    const void *aux;
+    void       *data[];
 };
 
 #define JULE_ARRAY_INIT        ((Jule_Array*)NULL)
@@ -607,11 +608,22 @@ static inline unsigned jule_len(Jule_Array *array) {
     return array == NULL ? 0 : array->len;
 }
 
+static inline Jule_Array *jule_array_set_aux(Jule_Array *array, const void *aux) {
+    if (array == NULL) {
+        array = JULE_MALLOC(sizeof(Jule_Array) + (JULE_ARRAY_INITIAL_CAP * sizeof(void*)));
+        array->len = 0;
+        array->cap = JULE_ARRAY_INITIAL_CAP;
+    }
+    array->aux = aux;
+    return array;
+}
+
 static inline Jule_Array *jule_push(Jule_Array *array, void *item) {
     if (array == NULL) {
         array = JULE_MALLOC(sizeof(Jule_Array) + (JULE_ARRAY_INITIAL_CAP * sizeof(void*)));
         array->len = 0;
         array->cap = JULE_ARRAY_INITIAL_CAP;
+        array->aux = NULL;
         goto push;
     }
 
@@ -1112,6 +1124,7 @@ static Jule_Value *_jule_copy(Jule_Value *value, int force) {
                 array = jule_push(array, _jule_copy(child, force));
             }
             copy->eval_values = array;
+            copy->eval_values = jule_array_set_aux(copy->eval_values, value->eval_values->aux);
             break;
         case _JULE_BUILTIN_FN:
             break;
@@ -1437,6 +1450,7 @@ static void jule_ensure_top_is_tree(Jule_Parse_Context *cxt) {
     top->line        = value->line;
     top->col         = value->col;
     top->eval_values = jule_push(top->eval_values, value);
+    top->eval_values = jule_array_set_aux(top->eval_values, cxt->interp->cur_file);
 }
 
 static int jule_consume_comment(Jule_Parse_Context *cxt) {
@@ -1966,6 +1980,7 @@ static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value 
 
 static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value *fn, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status           status;
+    Jule_String_ID        save_file;
     Jule_Value           *ev;
     Jule_Value           *def_tree;
     Jule_Value           *fn_sym;
@@ -1979,7 +1994,11 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
 
     status = JULE_SUCCESS;
 
+    save_file = interp->cur_file;
+
     if (fn->type == _JULE_TREE) {
+        interp->cur_file = fn->eval_values->aux;
+
         status = jule_eval(interp, tree, &ev);
         if (status != JULE_SUCCESS) {
             *result = NULL;
@@ -1987,6 +2006,8 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
         }
         *result = ev;
     } else if (fn->type == _JULE_FN) {
+        interp->cur_file = fn->eval_values->aux;
+
         def_tree = jule_elem(fn->eval_values, 1);
 
         if (def_tree->type == _JULE_TREE) {
@@ -2076,6 +2097,8 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
     }
 
 out:;
+
+    interp->cur_file = save_file;
     return status;
 }
 
