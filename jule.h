@@ -25,23 +25,25 @@
 typedef enum { _JULE_STATUS } Jule_Status;
 #undef _JULE_STATUS_X
 
-#define _JULE_TYPE                                                 \
-    _JULE_TYPE_X(JULE_UNKNOWN,           "<unknown type>")         \
-    _JULE_TYPE_X(JULE_NIL,               "nil")                    \
-    _JULE_TYPE_X(JULE_NUMBER,            "number")                 \
-    _JULE_TYPE_X(JULE_STRING,            "string")                 \
-    _JULE_TYPE_X(JULE_SYMBOL,            "symbol")                 \
-    _JULE_TYPE_X(JULE_LIST,              "list")                   \
-    _JULE_TYPE_X(JULE_OBJECT,            "object")                 \
-    _JULE_TYPE_X(_JULE_TREE,             "unevaluated expression") \
-    _JULE_TYPE_X(_JULE_FN,               "function")               \
-    _JULE_TYPE_X(_JULE_BUILTIN_FN,       "function (builtin)")     \
-    _JULE_TYPE_X(_JULE_LIST_OR_OBJECT,   "list or object")         \
-    _JULE_TYPE_X(_JULE_STRING_OR_NUMBER, "string or number")
+#define _JULE_TYPE                                                           \
+    _JULE_TYPE_X(JULE_UNKNOWN,           "<unknown type>")                   \
+    _JULE_TYPE_X(JULE_NIL,               "nil")                              \
+    _JULE_TYPE_X(JULE_NUMBER,            "number")                           \
+    _JULE_TYPE_X(JULE_STRING,            "string")                           \
+    _JULE_TYPE_X(JULE_SYMBOL,            "symbol")                           \
+    _JULE_TYPE_X(JULE_LIST,              "list")                             \
+    _JULE_TYPE_X(JULE_OBJECT,            "object")                           \
+    _JULE_TYPE_X(_JULE_TREE,             "unevaluated expression")           \
+    _JULE_TYPE_X(_JULE_FN,               "function")                         \
+    _JULE_TYPE_X(_JULE_BUILTIN_FN,       "function (builtin)")               \
+    _JULE_TYPE_X(_JULE_LIST_OR_OBJECT,   "list or object")                   \
+    _JULE_TYPE_X(_JULE_KEYLIKE,          "keylike (string, number, or nil)")
 
 #define _JULE_TYPE_X(e, s) e,
 typedef enum { _JULE_TYPE } Jule_Type;
 #undef _JULE_TYPE_X
+
+#define JULE_TYPE_IS_KEYLIKE(_t) ((_t) == JULE_STRING || (_t) == JULE_NUMBER || (_t) == JULE_NIL)
 
 enum {
     JULE_NO_QUOTE  = 1u << 0u,
@@ -735,11 +737,13 @@ static inline unsigned long long jule_string_id_hash(Jule_String_ID id) {
 }
 
 static unsigned long long jule_valhash(Jule_Value *val) {
-    JULE_ASSERT(val->type == JULE_NUMBER || val->type == JULE_STRING);
+    JULE_ASSERT(JULE_TYPE_IS_KEYLIKE(val->type));
 
     /* @todo zeros, nan, inf w/ sign */
     if (val->type == JULE_NUMBER) {
         return val->_integer;
+    } else if (val->type == JULE_NIL) {
+        return 0;
     }
 
     return jule_string_id_hash(val->string_id);
@@ -2239,25 +2243,24 @@ static Jule_Status jule_args(Jule_Interp *interp, Jule_Value *tree, const char *
         (*ve_ptr)->line = v->line;
 
         switch (c) {
-            case '0': t = JULE_NIL;               break;
-            case 'n': t = JULE_NUMBER;            break;
-            case 's': t = JULE_STRING;            break;
-            case '$': t = JULE_SYMBOL;            break;
-            case 'l': t = JULE_LIST;              break;
-            case 'o': t = JULE_OBJECT;            break;
-            case '#': t = _JULE_LIST_OR_OBJECT;   break;
-            case 'k': t = _JULE_STRING_OR_NUMBER; break;
-            case 'x': t = _JULE_TREE;             break;
-            case '*': t = -1;                     break;
-            default:  t = JULE_UNKNOWN;           break;
+            case '0': t = JULE_NIL;             break;
+            case 'n': t = JULE_NUMBER;          break;
+            case 's': t = JULE_STRING;          break;
+            case '$': t = JULE_SYMBOL;          break;
+            case 'l': t = JULE_LIST;            break;
+            case 'o': t = JULE_OBJECT;          break;
+            case '#': t = _JULE_LIST_OR_OBJECT; break;
+            case 'k': t = _JULE_KEYLIKE;        break;
+            case 'x': t = _JULE_TREE;           break;
+            case '*': t = -1;                   break;
+            default:  t = JULE_UNKNOWN;         break;
         }
 
         if (t == _JULE_LIST_OR_OBJECT
         &&  ((*ve_ptr)->type == JULE_LIST || (*ve_ptr)->type == JULE_OBJECT)) {
 
             /* Fine. */
-        } else if (t == _JULE_STRING_OR_NUMBER
-        &&  ((*ve_ptr)->type == JULE_STRING || (*ve_ptr)->type == JULE_NUMBER)) {
+        } else if (t == _JULE_KEYLIKE && JULE_TYPE_IS_KEYLIKE((*ve_ptr)->type)) {
 
             /* Fine. */
         } else if (t >= 0 && (*ve_ptr)->type != t) {
@@ -3226,7 +3229,7 @@ out:;
 static Jule_Status jule_builtin_if(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *cond;
-    int          which;
+    unsigned     which;
     Jule_Value  *then;
 
     status = JULE_SUCCESS;
@@ -3253,8 +3256,8 @@ static Jule_Status jule_builtin_if(Jule_Interp *interp, Jule_Value *tree, unsign
 
     which = 1 + (cond->number == 0);
 
-    then = values[which];
-    if (then != NULL) {
+    if (which < n_values) {
+        then   = values[which];
         status = jule_eval(interp, then, &then);
         if (status != JULE_SUCCESS) {
             *result = NULL;
