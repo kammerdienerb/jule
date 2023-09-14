@@ -781,7 +781,7 @@ struct Jule_Interp_Struct {
     _Jule_String_Table    strings;
     _Jule_Symbol_Table    symtab;
     Jule_Array           *local_symtab_stack;
-    char                 *cur_file;
+    Jule_String_ID        cur_file;
 };
 
 
@@ -1188,7 +1188,7 @@ static void jule_make_parse_error(Jule_Interp *interp, int line, int col, Jule_S
     info.status        = status;
     info.location.line = line;
     info.location.col  = col;
-    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     jule_error(interp, &info);
 }
 
@@ -1199,7 +1199,7 @@ static void jule_make_interp_error(Jule_Interp *interp, Jule_Value *value, Jule_
     info.status        = status;
     info.location.line = value->line;
     info.location.col  = value->col;
-    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     jule_error(interp, &info);
 }
 
@@ -1210,7 +1210,7 @@ static void jule_make_lookup_error(Jule_Interp *interp, Jule_Value *value, Jule_
     info.status        = JULE_ERR_LOOKUP;
     info.location.line = value->line;
     info.location.col  = value->col;
-    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     info.sym           = jule_charptr_dup(jule_get_string(interp, id)->chars);
     jule_error(interp, &info);
 }
@@ -1222,7 +1222,7 @@ static void jule_make_arity_error(Jule_Interp *interp, Jule_Value *value, int wa
     info.status         = JULE_ERR_ARITY;
     info.location.line  = value->line;
     info.location.col   = value->col;
-    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     info.wanted_arity   = wanted;
     info.got_arity      = got;
     info.arity_at_least = at_least;
@@ -1236,7 +1236,7 @@ static void jule_make_type_error(Jule_Interp *interp, Jule_Value *value, Jule_Ty
     info.status        = JULE_ERR_TYPE;
     info.location.line = value->line;
     info.location.col  = value->col;
-    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     info.wanted_type   = wanted;
     info.got_type      = got;
     jule_error(interp, &info);
@@ -1249,7 +1249,7 @@ static void jule_make_object_key_type_error(Jule_Interp *interp, Jule_Value *val
     info.status        = JULE_ERR_OBJECT_KEY_TYPE;
     info.location.line = value->line;
     info.location.col  = value->col;
-    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     info.got_type      = got;
     jule_error(interp, &info);
 }
@@ -1261,7 +1261,7 @@ static void jule_make_not_a_fn_error(Jule_Interp *interp, Jule_Value *value, Jul
     info.status        = JULE_ERR_NOT_A_FN;
     info.location.line = value->line;
     info.location.col  = value->col;
-    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     info.got_type      = got;
     jule_error(interp, &info);
 }
@@ -1273,7 +1273,7 @@ static void jule_make_bad_index_error(Jule_Interp *interp, Jule_Value *value, Ju
     info.status        = JULE_ERR_BAD_INDEX;
     info.location.line = value->line;
     info.location.col  = value->col;
-    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     info.bad_index     = bad_index;
     jule_error(interp, &info);
 }
@@ -1285,7 +1285,7 @@ static void jule_make_file_error(Jule_Interp *interp, Jule_Value *value, Jule_St
     info.status        = status;
     info.location.line = value->line;
     info.location.col  = value->col;
-    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     info.path          = jule_charptr_dup(path);
     jule_error(interp, &info);
 }
@@ -1297,7 +1297,7 @@ static void jule_make_install_error(Jule_Interp *interp, Jule_Value *value, Jule
     info.status        = status;
     info.location.line = value->line;
     info.location.col  = value->col;
-    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(interp->cur_file); }
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     info.sym           = jule_charptr_dup(jule_get_string(interp, id)->chars);
     jule_error(interp, &info);
 }
@@ -4081,7 +4081,7 @@ static Jule_Status jule_builtin_eval_file(Jule_Interp *interp, Jule_Value *tree,
     Jule_Status        status;
     Jule_Value        *path;
     const Jule_String *pstring;
-    char              *save_file;
+    Jule_String_ID     save_file;
     const char        *mem;
     int                size;
     Jule_Array        *nodes = JULE_ARRAY_INIT;
@@ -4105,7 +4105,7 @@ static Jule_Status jule_builtin_eval_file(Jule_Interp *interp, Jule_Value *tree,
     }
 
     save_file        = interp->cur_file;
-    interp->cur_file = jule_charptr_dup(pstring->chars);
+    interp->cur_file = path->string_id;
 
     status = jule_parse_nodes(interp, mem, size, &nodes);
     if (status != JULE_SUCCESS) {
@@ -4135,7 +4135,6 @@ static Jule_Status jule_builtin_eval_file(Jule_Interp *interp, Jule_Value *tree,
     }
 
 out_restore_file:;
-    JULE_FREE(interp->cur_file);
     interp->cur_file = save_file;
 
 out:;
@@ -4336,10 +4335,6 @@ void jule_free(Jule_Interp *interp) {
         JULE_FREE((void*)*id);
     }
     hash_table_free(interp->strings);
-
-    if (interp->cur_file != NULL) {
-        JULE_FREE(interp->cur_file);
-    }
 
     memset(interp, 0, sizeof(*interp));
 }
