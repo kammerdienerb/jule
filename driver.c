@@ -63,7 +63,7 @@ static void on_jule_error(Jule_Error_Info *info) {
         case JULE_ERR_OBJECT_KEY_TYPE:
             fprintf(stderr, " (wanted number or string, got %s)", jule_type_string(info->got_type));
             break;
-        case JULE_ERR_NOT_A_FN:
+        case JULE_ERR_BAD_INVOKE:
             fprintf(stderr, " (got %s)", jule_type_string(info->got_type));
             break;
         case JULE_ERR_BAD_INDEX:

@@ -55,6 +55,7 @@ test my-object "test"
 test my-object "foo"
 
 println (field my-object "test")
+println (my-object "test")
 
 set i 0
 
