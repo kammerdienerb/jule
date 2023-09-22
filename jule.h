@@ -147,6 +147,7 @@ void         jule_free(Jule_Interp *interp);
 #include <string.h> /* strlen, memcpy, memset, memcmp */
 #include <stdarg.h>
 #include <math.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 
@@ -1635,7 +1636,7 @@ add_char:;
             val = jule_number_value(d);
             break;
         case JULE_TK_EOS_ERR:
-            PARSE_ERR_RET(cxt->interp, JULE_ERR_UNEXPECTED_EOS, cxt->line, cxt->col + (tk_end - tk_start));
+            PARSE_ERR_RET(cxt->interp, JULE_ERR_UNEXPECTED_EOS, cxt->line, start_col + (tk_end - tk_start));
             break;
         default:
             break;
@@ -1669,10 +1670,8 @@ static Jule_Status jule_parse_line(Jule_Parse_Context *cxt) {
     cxt->col = 1 + cxt->ind;
     first    = 1;
 
-    if (!PEEK_CHAR(cxt, c)) {            goto done; }
-    if (c == '\n')          { NEXT(cxt); goto done; }
-
-    if (jule_consume_comment(cxt)) { goto done; }
+    if (!PEEK_CHAR(cxt, c))                     { goto done; }
+    if (c == '\n' || jule_consume_comment(cxt)) { goto eol;  }
 
     while ((top = jule_top(cxt->stack)) != NULL
     &&     cxt->ind <= top->ind_level) {
@@ -1703,6 +1702,7 @@ static Jule_Status jule_parse_line(Jule_Parse_Context *cxt) {
         PARSE_ERR_RET(cxt->interp, status, cxt->line, cxt->col);
     }
 
+eol:;
     if (PEEK_CHAR(cxt, c)) {
         if (c == '\n') {
             NEXT(cxt);
@@ -1774,10 +1774,10 @@ do {                                            \
             break;
         case JULE_LIST:
             PUSHC('[');
-            PUSHC(flags & JULE_MULTILINE ? '\n' : ' ');
+            PUSHC((flags & JULE_MULTILINE) ? '\n' : ' ');
             FOR_EACH(value->list, child) {
-                _jule_string_print(interp, buff, len, cap, child, flags & JULE_MULTILINE ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
-                PUSHC(flags & JULE_MULTILINE ? '\n' : ' ');
+                _jule_string_print(interp, buff, len, cap, child, (flags & JULE_MULTILINE) ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
+                PUSHC((flags & JULE_MULTILINE) ? '\n' : ' ');
             }
             if (flags & JULE_MULTILINE) {
                 for (i = 0; i < ind; i += 1) { PUSHC(' '); }
@@ -1786,12 +1786,12 @@ do {                                            \
             break;
         case JULE_OBJECT:
             PUSHC('{');
-            PUSHC(flags & JULE_MULTILINE ? '\n' : ' ');
+            PUSHC((flags & JULE_MULTILINE) ? '\n' : ' ');
             hash_table_traverse((_Jule_Object)value->object, key, val) {
-                _jule_string_print(interp, buff, len, cap, key, flags & JULE_MULTILINE ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
+                _jule_string_print(interp, buff, len, cap, key, (flags & JULE_MULTILINE) ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
                 PUSHC(':');
-                _jule_string_print(interp, buff, len, cap, *val, flags & JULE_MULTILINE ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
-                PUSHC(flags & JULE_MULTILINE ? '\n' : ' ');
+                _jule_string_print(interp, buff, len, cap, *val, (flags & JULE_MULTILINE) ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
+                PUSHC((flags & JULE_MULTILINE) ? '\n' : ' ');
             }
             if (flags & JULE_MULTILINE) {
                 for (i = 0; i < ind; i += 1) { PUSHC(' '); }
@@ -4435,6 +4435,44 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_iso_date(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    int         status;
+    Jule_Value *s;
+    struct tm   tm;
+    const char *weekdays[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+
+    status = jule_args(interp, tree, "s", n_values, values, &s);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    memset(&tm, 0, sizeof(tm));
+    if (strptime(jule_get_string(interp, s->string_id)->chars, "%F %H:%M:%S", &tm) == NULL) {
+        *result = jule_nil_value();
+        goto out_free;
+    }
+
+    *result = jule_object_value();
+
+    jule_insert(*result, jule_string_value(interp, "seconds"), jule_number_value(tm.tm_sec));
+    jule_insert(*result, jule_string_value(interp, "minutes"), jule_number_value(tm.tm_min));
+    jule_insert(*result, jule_string_value(interp, "hours"),   jule_number_value(tm.tm_hour));
+    jule_insert(*result, jule_string_value(interp, "day"),     jule_number_value(tm.tm_mday));
+    jule_insert(*result, jule_string_value(interp, "wday"),    jule_string_value(interp, weekdays[tm.tm_wday % 7]));
+    jule_insert(*result, jule_string_value(interp, "yday"),    jule_number_value(1 + tm.tm_yday));
+    jule_insert(*result, jule_string_value(interp, "month"),   jule_number_value(1 + tm.tm_mon));
+    jule_insert(*result, jule_string_value(interp, "year"),    jule_number_value(1900 + tm.tm_year));
+    jule_insert(*result, jule_string_value(interp, "dst"),     jule_number_value(tm.tm_isdst));
+    jule_insert(*result, jule_string_value(interp, "epoch"),   jule_number_value(mktime(&tm)));
+
+out_free:;
+    jule_free_value(s);
+
+out:;
+    return status;
+}
+
 static Jule_Status jule_parse_nodes(Jule_Interp *interp, const char *str, int size, Jule_Array **out_nodes);
 
 static Jule_Status jule_builtin_eval_file(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
@@ -4645,6 +4683,7 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     JULE_INSTALL_FN("keys",          jule_builtin_keys);
     JULE_INSTALL_FN("values",        jule_builtin_values);
     JULE_INSTALL_FN("sorted",        jule_builtin_sorted);
+    JULE_INSTALL_FN("iso-date",      jule_builtin_iso_date);
     JULE_INSTALL_FN("eval-file",     jule_builtin_eval_file);
 
 #undef JULE_INSTALL_FN
