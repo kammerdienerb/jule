@@ -4765,7 +4765,7 @@ static Jule_Status jule_builtin_iso_date(Jule_Interp *interp, Jule_Value *tree, 
     }
 
     memset(&tm, 0, sizeof(tm));
-    if (strptime(jule_get_string(interp, s->string_id)->chars, "%F %H:%M:%S", &tm) == NULL) {
+    if (strptime(jule_get_string(interp, s->string_id)->chars, "%FT%T%z", &tm) == NULL) {
         *result = jule_nil_value();
         goto out_free;
     }
