@@ -141,11 +141,13 @@ void         jule_free(Jule_Interp *interp);
 #endif
 
 #define _GNU_SOURCE
+#define _XOPEN_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h> /* strlen, memcpy, memset, memcmp */
 #include <stdarg.h>
+#include <alloca.h>
 #include <math.h>
 #include <time.h>
 #include <sys/stat.h>
