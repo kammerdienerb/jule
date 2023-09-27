@@ -140,8 +140,12 @@ void         jule_free(Jule_Interp *interp);
 #define JULE_ASSERT(...)
 #endif
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -1917,8 +1921,7 @@ static Jule_Status jule_parse_next_value(Jule_Parse_Context *cxt, Jule_Value **v
                 if (c == '\\') {
                     tk_start += 1;
                     if (tk_start < tk_end) {
-                        c = *tk_start;
-                        switch (c) {
+                        switch (*tk_start) {
                             case '\\':
                                 break;
                             case 'n':
@@ -1934,6 +1937,9 @@ static Jule_Status jule_parse_next_value(Jule_Parse_Context *cxt, Jule_Value **v
                                 c = '"';
                                 break;
                             default:
+                                sbuff[slen]  = c;
+                                slen        += 1;
+                                c            = *tk_start;
                                 goto add_char;
                         }
                     }
@@ -3615,6 +3621,7 @@ static Jule_Status jule_builtin_fmt(Jule_Interp *interp, Jule_Value *tree, unsig
     Jule_Value        *fmt;
     const Jule_String *fstring;
     unsigned           n;
+    unsigned           extra;
     char               last;
     char               c;
     unsigned           i;
@@ -3651,11 +3658,17 @@ static Jule_Status jule_builtin_fmt(Jule_Interp *interp, Jule_Value *tree, unsig
 
     fstring = jule_get_string(interp, fmt->string_id);
     n       = 0;
+    extra   = 0;
     last    = 0;
     for (i = 0; i < fstring->len; i += 1) {
-        c     = fstring->chars[i];
-        n    += ((c == '%') & (last != '\\'));
-        last  = c;
+        c = fstring->chars[i];
+        if (c == '%') {
+            extra += 1;
+            if (last != '\\') {
+                n += 1;
+            }
+        }
+        last = c;
     }
 
     if (n_values - 1 != n) {
@@ -3677,7 +3690,7 @@ static Jule_Status jule_builtin_fmt(Jule_Interp *interp, Jule_Value *tree, unsig
         jule_free_value(ev);
     }
 
-    len = fstring->len - n;
+    len = fstring->len - extra;
     FOR_EACH(strings, s) {
         len += strlen(s);
     }
@@ -3689,7 +3702,9 @@ static Jule_Status jule_builtin_fmt(Jule_Interp *interp, Jule_Value *tree, unsig
     last = 0;
     for (i = 0; i < fstring->len; i += 1) {
         c = fstring->chars[i];
-        if (c == '%' && last != '\\') {
+        if (c == '\\' && i < fstring->len - 1 && fstring->chars[i + 1] == '%') {
+            /* skip */
+        } else if (c == '%' && last != '\\') {
             s      = jule_elem(strings, n);
             sublen = strlen(s);
             memcpy(ins, s, sublen);
