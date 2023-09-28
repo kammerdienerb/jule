@@ -1292,6 +1292,18 @@ out:;
 }
 
 Jule_Status jule_add_package_directory(Jule_Interp *interp, const char *path) {
+    char *home;
+    char  buff[4096];
+
+    if (path[0] == '~') {
+        home = getenv("HOME");
+
+        if (home != NULL) {
+            snprintf(buff, sizeof(buff), "%s%s", home, path + 1);
+            path = buff;
+        }
+    }
+
     interp->package_dirs = jule_push(interp->package_dirs, (void*)jule_get_string(interp, jule_get_string_id(interp, path)));
 
     return JULE_SUCCESS;
