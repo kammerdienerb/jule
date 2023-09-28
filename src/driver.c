@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
         wai_getExecutablePath(exe_path, exe_path_length, NULL);
         exe_path[exe_path_length] = 0;
 
-        dirname(exe_path);
+        exe_path = dirname(exe_path);
         strcat(exe_path, "/packages");
 
         jule_add_package_directory(&interp, exe_path);
