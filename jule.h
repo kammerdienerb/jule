@@ -2813,11 +2813,13 @@ static Jule_Status jule_builtin_set(Jule_Interp *interp, Jule_Value *tree, unsig
         *result = NULL;
         jule_make_install_error(interp, tree, status, sym->symbol_id);
         jule_free_value(val);
-        jule_free_value(sym);
-        goto out;
+        goto out_free;
     }
 
     *result = val;
+
+out_free:;
+    jule_free_value(sym);
 
 out:;
     return status;
@@ -2846,11 +2848,13 @@ static Jule_Status jule_builtin_local(Jule_Interp *interp, Jule_Value *tree, uns
         *result = NULL;
         jule_make_install_error(interp, tree, status, sym->symbol_id);
         jule_free_value(val);
-        jule_free_value(sym);
-        goto out;
+        goto out_free;
     }
 
     *result = val;
+
+out_free:;
+    jule_free_value(sym);
 
 out:;
     return status;
@@ -2879,11 +2883,13 @@ static Jule_Status jule_builtin_eset(Jule_Interp *interp, Jule_Value *tree, unsi
         *result = NULL;
         jule_make_install_error(interp, tree, status, sym->symbol_id);
         jule_free_value(val);
-        jule_free_value(sym);
-        goto out;
+        goto out_free;
     }
 
     *result = val;
+
+out_free:;
+    jule_free_value(sym);
 
 out:;
     return status;
@@ -2912,11 +2918,13 @@ static Jule_Status jule_builtin_elocal(Jule_Interp *interp, Jule_Value *tree, un
         *result = NULL;
         jule_make_install_error(interp, tree, status, sym->symbol_id);
         jule_free_value(val);
-        jule_free_value(sym);
-        goto out;
+        goto out_free;
     }
 
     *result = val;
+
+out_free:;
+    jule_free_value(sym);
 
 out:;
     return status;
@@ -2967,7 +2975,6 @@ static Jule_Status jule_builtin_fn(Jule_Interp *interp, Jule_Value *tree, unsign
         *result = NULL;
         jule_make_install_error(interp, sym, status, sym->symbol_id);
         jule_free_value(fn);
-        jule_free_value(sym);
         goto out;
     }
 
@@ -3022,7 +3029,6 @@ static Jule_Status jule_builtin_localfn(Jule_Interp *interp, Jule_Value *tree, u
         *result = NULL;
         jule_make_install_error(interp, sym, status, sym->symbol_id);
         jule_free_value(fn);
-        jule_free_value(sym);
         goto out;
     }
 
@@ -4892,7 +4898,7 @@ static Jule_Status jule_builtin_load_package(Jule_Interp *interp, Jule_Value *tr
         goto out;
     }
 
-    load = (__typeof(load))dlsym(handle, "jule_load_package");
+    *(void**)(&load) = dlsym(handle, "jule_load_package");
     if (load == NULL) {
         *result = NULL;
         jule_make_load_package_error(interp, tree, JULE_ERR_LOAD_PACKAGE_FAILURE, buff, dlerror());

@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE
+
 #define JULE_IMPL
 #include <jule.h>
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-CFLAGS="-Wall -pedantic -Wextra -Werror -g -O0"
+CFLAGS="-Wall -pedantic -Wextra -Werror -g -O0 -ldl"
 # CFLAGS="-O3"
 
 echo "CC jule"

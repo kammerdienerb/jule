@@ -30,7 +30,7 @@ static Jule_Status _j_open(Jule_Interp *interp, Jule_Value *tree, unsigned n_val
 
     *result = jule_object_value();
     jule_insert(*result, jule_string_value(interp, "__handle__"), handle);
-    jule_insert(*result, jule_string_value(interp, "path"),       jule_copy(pathv));
+    jule_insert(*result, jule_string_value(interp, "path"),       jule_copy_force(pathv));
 
 out_free:;
     jule_free_value(pathv);
@@ -173,10 +173,10 @@ static Jule_Status j_read_lines(Jule_Interp *interp, Jule_Value *tree, unsigned 
         }
 
         (*result)->list = jule_push((*result)->list, jule_string_value(interp, line));
+    }
 
+    if (line != NULL) {
         free(line);
-        line = NULL;
-        cap  = 0;
     }
 
 out:;
