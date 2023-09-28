@@ -5,11 +5,20 @@
 
 // in case you want to #include "whereami.c" in a larger compilation unit
 #if !defined(WHEREAMI_H)
-#include "whereami.h"
+#include <whereami.h>
 #endif
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#if defined(__linux__) || defined(__CYGWIN__)
+#undef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#elif defined(__APPLE__)
+#undef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE
+#define _DARWIN_BETTER_REALPATH
 #endif
 
 #if !defined(WAI_MALLOC) || !defined(WAI_FREE) || !defined(WAI_REALLOC)
@@ -360,7 +369,6 @@ int WAI_PREFIX(getModulePath)(char* out, int capacity, int* dirname_length)
 
 #elif defined(__APPLE__)
 
-#define _DARWIN_BETTER_REALPATH
 #include <mach-o/dyld.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -784,46 +792,6 @@ int WAI_PREFIX(getModulePath)(char* out, int capacity, int* dirname_length)
 
   return length;
 }
-
-#elif defined(__sun) && defined(__SVR4)
-
-#include <stdlib.h>
-#include <limits.h>
-
-WAI_FUNCSPEC
-int WAI_PREFIX(getExecutablePath)(char* out, int capacity, int* dirname_length)
-{
-  char buffer[PATH_MAX];
-  int  length;
-
-  if (realpath(getexecname(), buffer) == NULL) {
-    return -1;
-  }
-
-  length = (int)strlen(buffer);
-
-  if (length <= capacity) {
-    memcpy(out, buffer, length);
-    if (dirname_length)
-    {
-      int i;
-
-      for (i = length - 1; i >= 0; --i)
-      {
-        if (out[i] == '/')
-        {
-          *dirname_length = i;
-          break;
-        }
-      }
-    }
-  }
-
-  return length;
-}
-
-WAI_NOINLINE WAI_FUNCSPEC
-int WAI_PREFIX(getModulePath)(char* out, int capacity, int* dirname_length) { return -1; }
 
 #else
 

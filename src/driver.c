@@ -1,3 +1,5 @@
+#include "whereami.c"
+
 #define _XOPEN_SOURCE 700
 #include <stdio.h>
 
@@ -7,8 +9,6 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <libgen.h>
-
-#include "whereami.c"
 
 Jule_Interp interp;
 
