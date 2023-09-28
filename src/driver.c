@@ -19,6 +19,7 @@ int main(int argc, char **argv) {
     int         code_size;
     int         exe_path_length;
     char       *exe_path;
+    char       *exe_dir;
 
     if (argc < 2) {
         fprintf(stderr, "expected at least one argument: a jule file path\n");
@@ -43,10 +44,11 @@ int main(int argc, char **argv) {
         wai_getExecutablePath(exe_path, exe_path_length, NULL);
         exe_path[exe_path_length] = 0;
 
-        dirname(exe_path);
-        strcat(exe_path, "/packages");
+        exe_dir = dirname(exe_path);
+        strcat(exe_dir, "/packages");
 
-        jule_add_package_directory(&interp, exe_path);
+        jule_add_package_directory(&interp, exe_dir);
+        free(exe_path);
     }
 
     jule_parse(&interp, code, strlen(code));

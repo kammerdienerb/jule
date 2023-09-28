@@ -2426,6 +2426,14 @@ Jule_Value *jule_lookup(Jule_Interp *interp, Jule_String_ID id) {
     return lookup == NULL ? NULL : *lookup;
 }
 
+Jule_Value *jule_lookup_local_only(Jule_Interp *interp, Jule_String_ID id) {
+    Jule_Value **lookup;
+
+    lookup = hash_table_get_val(jule_local_symtab(interp), id);
+
+    return lookup == NULL ? NULL : *lookup;
+}
+
 static Jule_Status jule_install_common(Jule_Interp *interp, _Jule_Symbol_Table symtab, Jule_String_ID id, Jule_Value *val, int local) {
     Jule_Value **lookup;
 
@@ -3993,6 +4001,7 @@ static Jule_Status jule_builtin_while(Jule_Interp *interp, Jule_Value *tree, uns
     Jule_Value  *_cond;
     Jule_Value  *_expr;
     Jule_Value  *expr;
+    Jule_Value  *expr_cpy;
     Jule_Value  *cond;
     int          cont;
 
@@ -4045,6 +4054,11 @@ static Jule_Status jule_builtin_while(Jule_Interp *interp, Jule_Value *tree, uns
             *result = NULL;
             goto out;
         }
+
+        /* Get a copy of the resulting value that we know can't be deleted while running the condition expression. */
+        expr_cpy = jule_copy_force(expr);
+        jule_free_value(expr);
+        expr = expr_cpy;
     }
 
 out:;
@@ -4173,11 +4187,13 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, u
             }
 
             JULE_UNBORROWER(it);
-            status = jule_uninstall_local_no_free(interp, sym->symbol_id);
-            if (status != JULE_SUCCESS) {
-                *result = NULL;
-                jule_make_install_error(interp, sym, status, sym->symbol_id);
-                goto out_free;
+            if (jule_lookup_local_only(interp, sym->symbol_id) == it) {
+                status = jule_uninstall_local_no_free(interp, sym->symbol_id);
+                if (status != JULE_SUCCESS) {
+                    *result = NULL;
+                    jule_make_install_error(interp, sym, status, sym->symbol_id);
+                    goto out_free;
+                }
             }
         }
 
@@ -4214,11 +4230,13 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, u
             }
 
             JULE_UNBORROWER(it);
-            status = jule_uninstall_local_no_free(interp, sym->symbol_id);
-            if (status != JULE_SUCCESS) {
-                *result = NULL;
-                jule_make_install_error(interp, sym, status, sym->symbol_id);
-                goto out_free;
+            if (jule_lookup_local_only(interp, sym->symbol_id) == it) {
+                status = jule_uninstall_local_no_free(interp, sym->symbol_id);
+                if (status != JULE_SUCCESS) {
+                    *result = NULL;
+                    jule_make_install_error(interp, sym, status, sym->symbol_id);
+                    goto out_free;
+                }
             }
         }
     }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# CFLAGS="-Isrc -Wall -pedantic -Wextra -Werror -g -O0"
-CFLAGS="-Isrc -O3"
+CFLAGS="-Isrc -Wall -pedantic -Wextra -Werror -g -O0"
+# CFLAGS="-Isrc -O3"
 LDFLAGS="-ldl"
 
 echo "CC jule"

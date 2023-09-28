@@ -114,6 +114,9 @@ static Jule_Status j_read_line(Jule_Interp *interp, Jule_Value *tree, unsigned n
     cap  = 0;
 
     if (getline(&line, &cap, f) < 0) {
+        if (line != NULL) {
+            free(line);
+        }
         *result = jule_nil_value();
         goto out;
     }
