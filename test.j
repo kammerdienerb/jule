@@ -1,14 +1,14 @@
-load-package "packages/file"
-load-package "packages/sys"
+use-package "packages/file"
+use-package "packages/sys"
 
 fn (err msg)
     do
         println msg
         exit 1
 
-if (< (len sys:argv) 3) (err "missing file argument")
+if (< (len sys:argv) 2) (err "missing file argument")
 
-local path (sys:argv 2)
+local path (sys:argv 1)
 
 if (== nil (local ifile (file:open-rd path)))
     err (fmt "error opening file '%'" path)

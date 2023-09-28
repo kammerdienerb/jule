@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
     int         code_size;
 
     if (argc < 2) {
-        fprintf(stderr, "expected one argument: a jule file path\n");
+        fprintf(stderr, "expected at least one argument: a jule file path\n");
         return 1;
     }
 
@@ -24,6 +24,7 @@ int main(int argc, char **argv) {
 
     jule_init_interp(&interp);
     jule_set_error_callback(&interp, on_jule_error);
+    jule_set_argv(&interp, argc - 1, argv + 1);
     interp.cur_file = jule_get_string_id(&interp, argv[1]);
     jule_parse(&interp, code, strlen(code));
     jule_interp(&interp);

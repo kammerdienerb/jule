@@ -1123,14 +1123,16 @@ typedef hash_table(Char_Ptr, Jule_String_ID) _Jule_String_Table;
 
 
 struct Jule_Interp_Struct {
-    Jule_Array           *roots;
-    Jule_Error_Callback   error_callback;
-    Jule_Output_Callback  output_callback;
-    Jule_Eval_Callback    eval_callback;
-    _Jule_String_Table    strings;
-    _Jule_Symbol_Table    symtab;
-    Jule_Array           *local_symtab_stack;
-    Jule_String_ID        cur_file;
+    Jule_Array            *roots;
+    Jule_Error_Callback    error_callback;
+    Jule_Output_Callback   output_callback;
+    Jule_Eval_Callback     eval_callback;
+    _Jule_String_Table     strings;
+    _Jule_Symbol_Table     symtab;
+    Jule_Array            *local_symtab_stack;
+    Jule_String_ID         cur_file;
+    int                    argc;
+    char                 **argv;
 };
 
 
@@ -1186,6 +1188,12 @@ Jule_Status jule_set_output_callback(Jule_Interp *interp, Jule_Output_Callback c
 
 Jule_Status jule_set_eval_callback(Jule_Interp *interp, Jule_Eval_Callback cb) {
     interp->eval_callback = cb;
+    return JULE_SUCCESS;
+}
+
+Jule_Status jule_set_argv(Jule_Interp *interp, int argc, char **argv) {
+    interp->argc = argc;
+    interp->argv = argv;
     return JULE_SUCCESS;
 }
 
@@ -4872,7 +4880,7 @@ out:;
     return status;
 }
 
-static Jule_Status jule_builtin_load_package(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+static Jule_Status jule_builtin_use_package(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status         status;
     Jule_Value         *path;
     const Jule_String  *pstring;
@@ -5087,7 +5095,7 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     JULE_INSTALL_FN("values",        jule_builtin_values);
     JULE_INSTALL_FN("sorted",        jule_builtin_sorted);
     JULE_INSTALL_FN("eval-file",     jule_builtin_eval_file);
-    JULE_INSTALL_FN("load-package",  jule_builtin_load_package);
+    JULE_INSTALL_FN("use-package",   jule_builtin_use_package);
     JULE_INSTALL_FN("exit",          jule_builtin_exit);
 
 #undef JULE_INSTALL_FN
