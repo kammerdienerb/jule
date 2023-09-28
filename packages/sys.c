@@ -1,7 +1,7 @@
 #define JULE_IMPL
 #include <jule.h>
 
-Jule_Value *jule_load_package(Jule_Interp *interp) {
+Jule_Value *jule_init_package(Jule_Interp *interp) {
     Jule_Value *argv_list;
     int         i;
 

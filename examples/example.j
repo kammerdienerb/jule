@@ -101,5 +101,5 @@ fn (fact n)
         * n (fact (- n 1))
 println (fact 6)
 
-eval-file "foo.j"
+eval-file "examples/foo.j"
 test:foo

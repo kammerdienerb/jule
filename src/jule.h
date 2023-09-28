@@ -1,29 +1,31 @@
 #ifndef __JULE_H__
 #define __JULE_H__
 
-#define _JULE_STATUS                                                                                                   \
-    _JULE_STATUS_X(JULE_SUCCESS,                    "No error.")                                                       \
-    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_EOS,         "Unexpected end of input.")                                        \
-    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_TOK,         "Unexpected token.")                                               \
-    _JULE_STATUS_X(JULE_ERR_LINE_TOO_LONG,          "Token starts too far into a line (column too big).")              \
-    _JULE_STATUS_X(JULE_ERR_TOO_MANY_LINES,         "You have exceeded the maximum number of lines in a single file.") \
-    _JULE_STATUS_X(JULE_ERR_EXTRA_RPAREN,           "Extraneous closing parenthesis.")                                 \
-    _JULE_STATUS_X(JULE_ERR_MISSING_RPAREN,         "End of line while parentheses left open.")                        \
-    _JULE_STATUS_X(JULE_ERR_EMPTY_PARENS,           "Empty parentheses are not allowed.")                              \
-    _JULE_STATUS_X(JULE_ERR_NO_INPUT,               "Missing a top-level expression.")                                 \
-    _JULE_STATUS_X(JULE_ERR_LOOKUP,                 "Failed to find symbol.")                                          \
-    _JULE_STATUS_X(JULE_ERR_BAD_INVOKE,             "Invoked value is not something that can be invoked in this way.") \
-    _JULE_STATUS_X(JULE_ERR_ARITY,                  "Incorrect number of arguments.")                                  \
-    _JULE_STATUS_X(JULE_ERR_TYPE,                   "Incorrect argument type.")                                        \
-    _JULE_STATUS_X(JULE_ERR_OBJECT_KEY_TYPE,        "Expression is not a valid key type.")                             \
-    _JULE_STATUS_X(JULE_ERR_MISSING_VAL,            "Missing value expression.")                                       \
-    _JULE_STATUS_X(JULE_ERR_BAD_INDEX,              "Field or element not found.")                                     \
-    _JULE_STATUS_X(JULE_ERR_EVAL_CANCELLED,         "Evaluation was cancelled.")                                       \
-    _JULE_STATUS_X(JULE_ERR_FILE_NOT_FOUND,         "File not found.")                                                 \
-    _JULE_STATUS_X(JULE_ERR_FILE_IS_DIR,            "File is a directory.")                                            \
-    _JULE_STATUS_X(JULE_ERR_MMAP_FAILED,            "mmap() failed.")                                                  \
-    _JULE_STATUS_X(JULE_ERR_RELEASE_WHILE_BORROWED, "Value released while a borrowed reference remains outstanding.")  \
-    _JULE_STATUS_X(JULE_ERR_LOAD_PACKAGE_FAILURE,   "Failed to load package.")
+#define _JULE_STATUS                                                                                                            \
+    _JULE_STATUS_X(JULE_SUCCESS,                             "No error.")                                                       \
+    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_EOS,                  "Unexpected end of input.")                                        \
+    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_TOK,                  "Unexpected token.")                                               \
+    _JULE_STATUS_X(JULE_ERR_LINE_TOO_LONG,                   "Token starts too far into a line (column too big).")              \
+    _JULE_STATUS_X(JULE_ERR_TOO_MANY_LINES,                  "You have exceeded the maximum number of lines in a single file.") \
+    _JULE_STATUS_X(JULE_ERR_EXTRA_RPAREN,                    "Extraneous closing parenthesis.")                                 \
+    _JULE_STATUS_X(JULE_ERR_MISSING_RPAREN,                  "End of line while parentheses left open.")                        \
+    _JULE_STATUS_X(JULE_ERR_EMPTY_PARENS,                    "Empty parentheses are not allowed.")                              \
+    _JULE_STATUS_X(JULE_ERR_NO_INPUT,                        "Missing a top-level expression.")                                 \
+    _JULE_STATUS_X(JULE_ERR_LOOKUP,                          "Failed to find symbol.")                                          \
+    _JULE_STATUS_X(JULE_ERR_BAD_INVOKE,                      "Invoked value is not something that can be invoked in this way.") \
+    _JULE_STATUS_X(JULE_ERR_ARITY,                           "Incorrect number of arguments.")                                  \
+    _JULE_STATUS_X(JULE_ERR_TYPE,                            "Incorrect argument type.")                                        \
+    _JULE_STATUS_X(JULE_ERR_OBJECT_KEY_TYPE,                 "Expression is not a valid key type.")                             \
+    _JULE_STATUS_X(JULE_ERR_MISSING_VAL,                     "Missing value expression.")                                       \
+    _JULE_STATUS_X(JULE_ERR_BAD_INDEX,                       "Field or element not found.")                                     \
+    _JULE_STATUS_X(JULE_ERR_EVAL_CANCELLED,                  "Evaluation was cancelled.")                                       \
+    _JULE_STATUS_X(JULE_ERR_FILE_NOT_FOUND,                  "File not found.")                                                 \
+    _JULE_STATUS_X(JULE_ERR_FILE_IS_DIR,                     "File is a directory.")                                            \
+    _JULE_STATUS_X(JULE_ERR_MMAP_FAILED,                     "mmap() failed.")                                                  \
+    _JULE_STATUS_X(JULE_ERR_RELEASE_WHILE_BORROWED,          "Value released while a borrowed reference remains outstanding.")  \
+    _JULE_STATUS_X(JULE_ERR_LOAD_PACKAGE_FAILURE,            "Failed to load package.")                                         \
+    _JULE_STATUS_X(JULE_ERR_USE_PACKAGE_FORBIDDEN,           "use-package has been disabled.")                                  \
+    _JULE_STATUS_X(JULE_ERR_ADD_PACKAGE_DIRECTORY_FORBIDDEN, "add-package-directory has been disabled.")
 
 #define _JULE_STATUS_X(e, s) e,
 typedef enum { _JULE_STATUS } Jule_Status;
@@ -106,6 +108,8 @@ Jule_Status  jule_init_interp(Jule_Interp *interp);
 Jule_Status  jule_set_error_callback(Jule_Interp *interp, Jule_Error_Callback cb);
 Jule_Status  jule_set_output_callback(Jule_Interp *interp, Jule_Output_Callback cb);
 Jule_Status  jule_set_eval_callback(Jule_Interp *interp, Jule_Eval_Callback cb);
+Jule_Status  jule_set_argv(Jule_Interp *interp, int argc, char **argv);
+Jule_Status  jule_load_package(Jule_Interp *interp, const char *name, Jule_Value **result);
 void         jule_free_error_info(Jule_Error_Info *info);
 Jule_Status  jule_parse(Jule_Interp *interp, const char *str, int size);
 Jule_Status  jule_interp(Jule_Interp *interp);
@@ -146,7 +150,7 @@ void         jule_free(Jule_Interp *interp);
 #define _GNU_SOURCE
 #endif
 #ifndef _XOPEN_SOURCE
-#define _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
 #endif
 #include <stdlib.h>
 #include <stdio.h>
@@ -1133,6 +1137,11 @@ struct Jule_Interp_Struct {
     Jule_String_ID         cur_file;
     int                    argc;
     char                 **argv;
+    int                    use_package_forbidden;
+    int                    add_package_directory_forbidden;
+    Jule_Array            *package_dirs;
+    Jule_Array            *package_handles;
+    Jule_Array            *package_values;
 };
 
 
@@ -1194,6 +1203,97 @@ Jule_Status jule_set_eval_callback(Jule_Interp *interp, Jule_Eval_Callback cb) {
 Jule_Status jule_set_argv(Jule_Interp *interp, int argc, char **argv) {
     interp->argc = argc;
     interp->argv = argv;
+    return JULE_SUCCESS;
+}
+
+static Jule_Value *jule_copy_force(Jule_Value *value);
+
+Jule_Status jule_load_package(Jule_Interp *interp, const char *name, Jule_Value **result) {
+    Jule_Status         status;
+    const Jule_String  *dir;
+    unsigned            i;
+    char                buff[4096];
+    void               *handle;
+    unsigned            idx;
+    void               *it;
+    Jule_Value *      (*init)(Jule_Interp*);
+    Jule_Value         *val;
+
+    status = JULE_SUCCESS;
+
+    if (result != NULL) { *result = NULL; }
+
+    snprintf(buff, sizeof(buff), "./%s.so", name);
+
+    if (access(buff, F_OK) >= 0) {
+        handle = dlopen(buff, RTLD_LAZY);
+
+        if (handle == NULL) {
+            status = JULE_ERR_LOAD_PACKAGE_FAILURE;
+            goto out;
+        } else {
+            goto found_handle;
+        }
+    }
+
+    if (jule_len(interp->package_dirs) > 0) {
+        for (i = jule_len(interp->package_dirs); i > 0; i -= 1) {
+            dir = jule_elem(interp->package_dirs, i - 1);
+
+            snprintf(buff, sizeof(buff), "%s/%s.so", dir->chars, name);
+
+            if (access(buff, F_OK) == -1) { continue; }
+
+            handle = dlopen(buff, RTLD_LAZY);
+
+            if (handle == NULL) {
+                status = JULE_ERR_LOAD_PACKAGE_FAILURE;
+                goto out;
+            } else {
+                goto found_handle;
+            }
+        }
+    }
+
+    handle = dlopen(buff, RTLD_LAZY); /* get dl to create an error */
+    status = JULE_ERR_LOAD_PACKAGE_FAILURE;
+    goto out;
+
+found_handle:;
+    idx = 0;
+    FOR_EACH(interp->package_handles, it) {
+        if (it == handle) {
+            dlclose(handle);
+            if (result != NULL) {
+                *result = jule_copy_force(jule_elem(interp->package_values, idx));
+            }
+            goto out;
+        }
+        idx += 1;
+    }
+    *(void**)(&init) = dlsym(handle, "jule_init_package");
+    if (init == NULL) {
+        *result = NULL;
+        status = JULE_ERR_LOAD_PACKAGE_FAILURE;
+        goto out;
+    }
+
+    val = init(interp);
+
+    interp->package_handles = jule_push(interp->package_handles, handle);
+    interp->package_values  = jule_push(interp->package_values,  val);
+
+    if (result != NULL) {
+        *result = jule_copy_force(val);
+    }
+
+out:;
+    return status;
+}
+
+Jule_Status jule_add_package_directory(Jule_Interp *interp, const char *path) {
+    interp->package_dirs = jule_push(interp->package_dirs, (void*)jule_get_string(interp, jule_get_string_id(interp, path)));
+
     return JULE_SUCCESS;
 }
 
@@ -1674,7 +1774,18 @@ static void jule_make_load_package_error(Jule_Interp *interp, Jule_Value *value,
     info.location.col          = value->col;
     if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     info.path                  = jule_charptr_dup(path);
-    info.package_error_message = jule_charptr_dup(message);
+    info.package_error_message = message == NULL ? "unknown error" : jule_charptr_dup(message);
+    jule_error(interp, &info);
+}
+
+static void jule_make_forbidden_error(Jule_Interp *interp, Jule_Value *value, Jule_Status status) {
+    Jule_Error_Info info;
+    memset(&info, 0, sizeof(info));
+    info.interp                = interp;
+    info.status                = status;
+    info.location.line         = value->line;
+    info.location.col          = value->col;
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
     jule_error(interp, &info);
 }
 
@@ -4881,12 +4992,48 @@ out:;
 }
 
 static Jule_Status jule_builtin_use_package(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
-    Jule_Status         status;
-    Jule_Value         *path;
-    const Jule_String  *pstring;
-    char                buff[4096];
-    void               *handle;
-    Jule_Value *      (*load)(Jule_Interp*);
+    Jule_Status        status;
+    Jule_Value        *name;
+    const Jule_String *name_string;
+
+    if (interp->use_package_forbidden) {
+        *result = NULL;
+        status  = JULE_ERR_USE_PACKAGE_FORBIDDEN;
+        jule_make_forbidden_error(interp, tree, status);
+        goto out;
+    }
+
+    status = jule_args(interp, tree, "s", n_values, values, &name);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    name_string = jule_get_string(interp, name->string_id);
+    jule_free_value(name);
+
+    status = jule_load_package(interp, name_string->chars, result);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        jule_make_load_package_error(interp, tree, status, name_string->chars, dlerror());
+        goto out;
+    }
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_add_package_directory(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status        status;
+    Jule_Value        *path;
+    const Jule_String *pstring;
+
+    if (interp->add_package_directory_forbidden) {
+        *result = NULL;
+        status  = JULE_ERR_USE_PACKAGE_FORBIDDEN;
+        jule_make_forbidden_error(interp, tree, status);
+        goto out;
+    }
 
     status = jule_args(interp, tree, "s", n_values, values, &path);
     if (status != JULE_SUCCESS) {
@@ -4897,23 +5044,9 @@ static Jule_Status jule_builtin_use_package(Jule_Interp *interp, Jule_Value *tre
     pstring = jule_get_string(interp, path->string_id);
     jule_free_value(path);
 
-    snprintf(buff, sizeof(buff), "%s.so", pstring->chars);
+    jule_add_package_directory(interp, pstring->chars);
 
-    handle = dlopen(buff, RTLD_LAZY);
-    if (handle == NULL) {
-        *result = NULL;
-        jule_make_load_package_error(interp, tree, JULE_ERR_LOAD_PACKAGE_FAILURE, buff, dlerror());
-        goto out;
-    }
-
-    *(void**)(&load) = dlsym(handle, "jule_load_package");
-    if (load == NULL) {
-        *result = NULL;
-        jule_make_load_package_error(interp, tree, JULE_ERR_LOAD_PACKAGE_FAILURE, buff, dlerror());
-        goto out;
-    }
-
-    *result = load(interp);
+    *result = jule_string_value(interp, pstring->chars);
 
 out:;
     return status;
@@ -5038,65 +5171,66 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
 
 #define JULE_INSTALL_FN(_name, _fn) jule_install_fn(interp, jule_get_string_id(interp, (_name)), (_fn))
 
-    JULE_INSTALL_FN("set",           jule_builtin_set);
-    JULE_INSTALL_FN("local",         jule_builtin_local);
-    JULE_INSTALL_FN("eset",          jule_builtin_eset);
-    JULE_INSTALL_FN("elocal",        jule_builtin_elocal);
-    JULE_INSTALL_FN("fn",            jule_builtin_fn);
-    JULE_INSTALL_FN("localfn",       jule_builtin_localfn);
-    JULE_INSTALL_FN("id",            jule_builtin_id);
-    JULE_INSTALL_FN("quote",         jule_builtin_quote);
-    JULE_INSTALL_FN("+",             jule_builtin_add);
-    JULE_INSTALL_FN("-",             jule_builtin_sub);
-    JULE_INSTALL_FN("*",             jule_builtin_mul);
-    JULE_INSTALL_FN("/",             jule_builtin_div);
-    JULE_INSTALL_FN("//",            jule_builtin_idiv);
-    JULE_INSTALL_FN("%",             jule_builtin_mod);
-    JULE_INSTALL_FN("++",            jule_builtin_inc);
-    JULE_INSTALL_FN("--",            jule_builtin_dec);
-    JULE_INSTALL_FN("==",            jule_builtin_equ);
-    JULE_INSTALL_FN("!=",            jule_builtin_neq);
-    JULE_INSTALL_FN("<",             jule_builtin_lss);
-    JULE_INSTALL_FN("<=",            jule_builtin_leq);
-    JULE_INSTALL_FN(">",             jule_builtin_gtr);
-    JULE_INSTALL_FN(">=",            jule_builtin_geq);
-    JULE_INSTALL_FN("not",           jule_builtin_not);
-    JULE_INSTALL_FN("and",           jule_builtin_and);
-    JULE_INSTALL_FN("or",            jule_builtin_or);
-    JULE_INSTALL_FN("print",         jule_builtin_print);
-    JULE_INSTALL_FN("println",       jule_builtin_println);
-    JULE_INSTALL_FN("string",        jule_builtin_string);
-    JULE_INSTALL_FN("symbol",        jule_builtin_symbol);
-    JULE_INSTALL_FN("pad",           jule_builtin_pad);
-    JULE_INSTALL_FN("fmt",           jule_builtin_fmt);
-    JULE_INSTALL_FN("do",            jule_builtin_do);
-    JULE_INSTALL_FN("then",          jule_builtin_do);
-    JULE_INSTALL_FN("else",          jule_builtin_do);
-    JULE_INSTALL_FN("if",            jule_builtin_if);
-    JULE_INSTALL_FN("while",         jule_builtin_while);
-    JULE_INSTALL_FN("repeat",        jule_builtin_repeat);
-    JULE_INSTALL_FN("foreach",       jule_builtin_foreach);
-    JULE_INSTALL_FN("list",          jule_builtin_list);
-    JULE_INSTALL_FN(".",             jule_builtin_dot);
-    JULE_INSTALL_FN("elem",          jule_builtin_elem);
-    JULE_INSTALL_FN("index",         jule_builtin_index);
-    JULE_INSTALL_FN("append",        jule_builtin_append);
-    JULE_INSTALL_FN("pop",           jule_builtin_pop);
-    JULE_INSTALL_FN("object",        jule_builtin_object);
-    JULE_INSTALL_FN("in",            jule_builtin_in);
-    JULE_INSTALL_FN("field",         jule_builtin_field);
-    JULE_INSTALL_FN("insert",        jule_builtin_insert);
-    JULE_INSTALL_FN("delete",        jule_builtin_delete);
-    JULE_INSTALL_FN("update-object", jule_builtin_update_object);
-    JULE_INSTALL_FN("erase",         jule_builtin_erase);
-    JULE_INSTALL_FN("len",           jule_builtin_len);
-    JULE_INSTALL_FN("empty",         jule_builtin_empty);
-    JULE_INSTALL_FN("keys",          jule_builtin_keys);
-    JULE_INSTALL_FN("values",        jule_builtin_values);
-    JULE_INSTALL_FN("sorted",        jule_builtin_sorted);
-    JULE_INSTALL_FN("eval-file",     jule_builtin_eval_file);
-    JULE_INSTALL_FN("use-package",   jule_builtin_use_package);
-    JULE_INSTALL_FN("exit",          jule_builtin_exit);
+    JULE_INSTALL_FN("set",                   jule_builtin_set);
+    JULE_INSTALL_FN("local",                 jule_builtin_local);
+    JULE_INSTALL_FN("eset",                  jule_builtin_eset);
+    JULE_INSTALL_FN("elocal",                jule_builtin_elocal);
+    JULE_INSTALL_FN("fn",                    jule_builtin_fn);
+    JULE_INSTALL_FN("localfn",               jule_builtin_localfn);
+    JULE_INSTALL_FN("id",                    jule_builtin_id);
+    JULE_INSTALL_FN("quote",                 jule_builtin_quote);
+    JULE_INSTALL_FN("+",                     jule_builtin_add);
+    JULE_INSTALL_FN("-",                     jule_builtin_sub);
+    JULE_INSTALL_FN("*",                     jule_builtin_mul);
+    JULE_INSTALL_FN("/",                     jule_builtin_div);
+    JULE_INSTALL_FN("//",                    jule_builtin_idiv);
+    JULE_INSTALL_FN("%",                     jule_builtin_mod);
+    JULE_INSTALL_FN("++",                    jule_builtin_inc);
+    JULE_INSTALL_FN("--",                    jule_builtin_dec);
+    JULE_INSTALL_FN("==",                    jule_builtin_equ);
+    JULE_INSTALL_FN("!=",                    jule_builtin_neq);
+    JULE_INSTALL_FN("<",                     jule_builtin_lss);
+    JULE_INSTALL_FN("<=",                    jule_builtin_leq);
+    JULE_INSTALL_FN(">",                     jule_builtin_gtr);
+    JULE_INSTALL_FN(">=",                    jule_builtin_geq);
+    JULE_INSTALL_FN("not",                   jule_builtin_not);
+    JULE_INSTALL_FN("and",                   jule_builtin_and);
+    JULE_INSTALL_FN("or",                    jule_builtin_or);
+    JULE_INSTALL_FN("print",                 jule_builtin_print);
+    JULE_INSTALL_FN("println",               jule_builtin_println);
+    JULE_INSTALL_FN("string",                jule_builtin_string);
+    JULE_INSTALL_FN("symbol",                jule_builtin_symbol);
+    JULE_INSTALL_FN("pad",                   jule_builtin_pad);
+    JULE_INSTALL_FN("fmt",                   jule_builtin_fmt);
+    JULE_INSTALL_FN("do",                    jule_builtin_do);
+    JULE_INSTALL_FN("then",                  jule_builtin_do);
+    JULE_INSTALL_FN("else",                  jule_builtin_do);
+    JULE_INSTALL_FN("if",                    jule_builtin_if);
+    JULE_INSTALL_FN("while",                 jule_builtin_while);
+    JULE_INSTALL_FN("repeat",                jule_builtin_repeat);
+    JULE_INSTALL_FN("foreach",               jule_builtin_foreach);
+    JULE_INSTALL_FN("list",                  jule_builtin_list);
+    JULE_INSTALL_FN(".",                     jule_builtin_dot);
+    JULE_INSTALL_FN("elem",                  jule_builtin_elem);
+    JULE_INSTALL_FN("index",                 jule_builtin_index);
+    JULE_INSTALL_FN("append",                jule_builtin_append);
+    JULE_INSTALL_FN("pop",                   jule_builtin_pop);
+    JULE_INSTALL_FN("object",                jule_builtin_object);
+    JULE_INSTALL_FN("in",                    jule_builtin_in);
+    JULE_INSTALL_FN("field",                 jule_builtin_field);
+    JULE_INSTALL_FN("insert",                jule_builtin_insert);
+    JULE_INSTALL_FN("delete",                jule_builtin_delete);
+    JULE_INSTALL_FN("update-object",         jule_builtin_update_object);
+    JULE_INSTALL_FN("erase",                 jule_builtin_erase);
+    JULE_INSTALL_FN("len",                   jule_builtin_len);
+    JULE_INSTALL_FN("empty",                 jule_builtin_empty);
+    JULE_INSTALL_FN("keys",                  jule_builtin_keys);
+    JULE_INSTALL_FN("values",                jule_builtin_values);
+    JULE_INSTALL_FN("sorted",                jule_builtin_sorted);
+    JULE_INSTALL_FN("eval-file",             jule_builtin_eval_file);
+    JULE_INSTALL_FN("use-package",           jule_builtin_use_package);
+    JULE_INSTALL_FN("add-package-directory", jule_builtin_add_package_directory);
+    JULE_INSTALL_FN("exit",                  jule_builtin_exit);
 
 #undef JULE_INSTALL_FN
 
@@ -5131,6 +5265,7 @@ void jule_free(Jule_Interp *interp) {
     Jule_Value         *it;
     char               *key;
     Jule_String_ID     *id;
+    void               *handle;
 
 
     while ((symtab = jule_pop(interp->local_symtab_stack)) != NULL) {
@@ -5139,6 +5274,11 @@ void jule_free(Jule_Interp *interp) {
     jule_free_array(interp->local_symtab_stack);
 
     jule_free_symtab(interp->symtab);
+
+    FOR_EACH(interp->package_values, it) {
+        jule_free_value_force(it);
+    }
+    jule_free_array(interp->package_values);
 
     FOR_EACH(interp->roots, it) {
         jule_free_value_force(it);
@@ -5151,6 +5291,13 @@ void jule_free(Jule_Interp *interp) {
         JULE_FREE((void*)*id);
     }
     hash_table_free(interp->strings);
+
+    FOR_EACH(interp->package_handles, handle) {
+        dlclose(handle);
+    }
+    jule_free_array(interp->package_handles);
+
+    jule_free_array(interp->package_dirs);
 
     memset(interp, 0, sizeof(*interp));
 }

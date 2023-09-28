@@ -1,8 +1,14 @@
-#define _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
 #include <stdio.h>
 
 #define JULE_IMPL
 #include "jule.h"
+
+#include <limits.h>
+#include <stdlib.h>
+#include <libgen.h>
+
+#include "whereami.c"
 
 Jule_Interp interp;
 
@@ -11,6 +17,8 @@ static void on_jule_error(Jule_Error_Info *info);
 int main(int argc, char **argv) {
     const char *code;
     int         code_size;
+    int         exe_path_length;
+    char       *exe_path;
 
     if (argc < 2) {
         fprintf(stderr, "expected at least one argument: a jule file path\n");
@@ -22,10 +30,25 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+
     jule_init_interp(&interp);
     jule_set_error_callback(&interp, on_jule_error);
     jule_set_argv(&interp, argc - 1, argv + 1);
     interp.cur_file = jule_get_string_id(&interp, argv[1]);
+
+
+    exe_path_length = wai_getExecutablePath(NULL, 0, NULL);
+    if (exe_path_length >= 0) {
+        exe_path        = malloc(exe_path_length + 1 + strlen("/packages"));
+        wai_getExecutablePath(exe_path, exe_path_length, NULL);
+        exe_path[exe_path_length] = 0;
+
+        dirname(exe_path);
+        strcat(exe_path, "/packages");
+
+        jule_add_package_directory(&interp, exe_path);
+    }
+
     jule_parse(&interp, code, strlen(code));
     jule_interp(&interp);
     jule_free(&interp);

@@ -62,7 +62,7 @@ out:;
     return status;
 }
 
-Jule_Value *jule_load_package(Jule_Interp *interp) {
+Jule_Value *jule_init_package(Jule_Interp *interp) {
 #define JULE_INSTALL_FN(_name, _fn) jule_install_fn(interp, jule_get_string_id(interp, (_name)), (_fn))
 
     JULE_INSTALL_FN("math:floor", j_floor);

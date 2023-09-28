@@ -1,10 +1,7 @@
-use-package "packages/file"
-use-package "packages/sys"
+use-package "file"
+use-package "sys"
 
-fn (err msg)
-    do
-        println msg
-        exit 1
+fn (err msg) (do     (println msg)     (exit 1))
 
 if (< (len sys:argv) 2) (err "missing file argument")
 
@@ -17,17 +14,10 @@ local lines (file:read-lines ifile)
 local n     (len lines)
 local dig   0
 
-while (> n 0)
-    do
-        local n (// n 10)
-        ++ dig
-
-local ofile (file:open-wr "/dev/stdout")
+while (> n 0) (do     (local n (// n 10))     (++ dig))
 
 local i 1
 foreach line lines
-    file:write ofile (fmt " % │ %\n" (pad dig (++ i)) line)
-
-file:close ofile
+    println (fmt " % │ %" (pad dig (++ i)) line)
 
 file:close ifile
