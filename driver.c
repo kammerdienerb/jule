@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
     const char *code;
     int         code_size;
 
-    if (argc != 2) {
+    if (argc < 2) {
         fprintf(stderr, "expected one argument: a jule file path\n");
         return 1;
     }
@@ -76,6 +76,9 @@ static void on_jule_error(Jule_Error_Info *info) {
         case JULE_ERR_FILE_IS_DIR:
         case JULE_ERR_MMAP_FAILED:
             fprintf(stderr, " (%s)", info->path);
+            break;
+        case JULE_ERR_LOAD_PACKAGE_FAILURE:
+            fprintf(stderr, " (%s) %s", info->path, info->package_error_message);
             break;
         default:
             break;

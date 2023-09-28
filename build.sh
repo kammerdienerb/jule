@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
 
-# gcc -o jule driver.c -Wall -pedantic -Wextra -Werror -g -O0
-gcc -o jule driver.c -O3
+CFLAGS="-Wall -pedantic -Wextra -Werror -g -O0"
+# CFLAGS="-O3"
+
+echo "CC jule"
+gcc -o jule driver.c ${CFLAGS} || exit $?
+
+for f in packages/*.c; do
+    SO=$(dirname $f)/$(basename $f .c).so
+    echo "CC ${SO}"
+    gcc -shared -fPIC -o ${SO} $f -I. ${CFLAGS} -lm || exit $?
+done
