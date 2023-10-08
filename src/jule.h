@@ -1430,8 +1430,8 @@ static void _jule_free_value(Jule_Value *value, int force) {
     Jule_Value         *child;
     Jule_Value         *key;
     Jule_Value        **val;
-    Jule_String_ID      sym;
     Jule_Closure_Info  *closure;
+    Jule_String_ID      sym;
 
     JULE_ASSERT((!force || !value->borrow_count)
     && "why are we forcing a free of a borrowed value?");
@@ -1564,12 +1564,15 @@ void jule_delete(Jule_Value *object, Jule_Value *key) {
 }
 
 static Jule_Value *_jule_copy(Jule_Value *value, int force) {
-    Jule_Value    *copy;
-    Jule_Array    *array = JULE_ARRAY_INIT;
-    Jule_Value    *child;
-    _Jule_Object   obj;
-    Jule_Value    *key;
-    Jule_Value   **val;
+    Jule_Value         *copy;
+    Jule_Array         *array = JULE_ARRAY_INIT;
+    Jule_Value         *child;
+    _Jule_Object        obj;
+    Jule_Value         *key;
+    Jule_Value        **val;
+    Jule_Closure_Info  *closure;
+    Jule_Closure_Info  *closure_cpy;
+    Jule_String_ID      sym;
 
     if (!force && (value->in_symtab)) { return value; }
 
@@ -1606,7 +1609,20 @@ static Jule_Value *_jule_copy(Jule_Value *value, int force) {
                 array = jule_push(array, _jule_copy(child, force));
             }
             copy->eval_values = array;
-            copy->eval_values = jule_array_set_aux(copy->eval_values, value->eval_values->aux);
+            if (value->type == _JULE_LAMBDA) {
+                closure     = value->eval_values->aux;
+                closure_cpy = JULE_MALLOC(sizeof(*closure_cpy));
+
+                closure_cpy->cur_file = closure->cur_file;
+                closure_cpy->captures = hash_table_make(Jule_String_ID, Jule_Value_Ptr, jule_string_id_hash);
+
+                hash_table_traverse(closure->captures, sym, val) {
+                    hash_table_insert(closure_cpy->captures, sym, jule_copy_force(*val));
+                }
+                copy->eval_values = jule_array_set_aux(copy->eval_values, closure_cpy);
+            } else {
+                copy->eval_values = jule_array_set_aux(copy->eval_values, value->eval_values->aux);
+            }
             break;
         case _JULE_BUILTIN_FN:
             break;
