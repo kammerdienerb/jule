@@ -5389,7 +5389,9 @@ static Jule_Status jule_builtin_eval_file(Jule_Interp *interp, Jule_Value *tree,
         }
     }
 
-    if (*result == NULL) {
+    if (*result != NULL) {
+        *result = jule_copy_force(*result);
+    } else {
         *result = jule_nil_value();
     }
 
