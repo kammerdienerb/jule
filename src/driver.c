@@ -113,5 +113,6 @@ static void on_jule_error(Jule_Error_Info *info) {
     fprintf(stderr, "\n");
 
     jule_free_error_info(info);
+
     exit(status);
 }

@@ -2565,6 +2565,7 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
     Jule_Value               *arg_sym;
     Jule_Value               *arg_val;
     Jule_Value               *expr;
+    unsigned                  lambda_params;
     const Jule_Closure_Info  *closure;
     Jule_String_ID            cap_sym;
     Jule_Value              **cap_valp;
@@ -2674,23 +2675,30 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
         closure          = fn->eval_values->aux;
         interp->cur_file = closure->cur_file;
 
-        def_tree = jule_elem(fn->eval_values, 1);
+        lambda_params = jule_len(fn->eval_values) > 2;
 
-        if (def_tree->type == _JULE_TREE || def_tree->type == _JULE_TREE_LINE_LEADER) {
-            n_params = jule_len(def_tree->eval_values);
-            params   = (Jule_Value**)def_tree->eval_values->data;
+        if (lambda_params) {
+            def_tree = jule_elem(fn->eval_values, 1);
+
+            if (def_tree->type == _JULE_TREE || def_tree->type == _JULE_TREE_LINE_LEADER) {
+                n_params = jule_len(def_tree->eval_values);
+                params   = (Jule_Value**)def_tree->eval_values->data;
+            } else {
+                status = JULE_ERR_TYPE;
+                jule_make_type_error(interp, def_tree, JULE_SYMBOL, def_tree->type);
+                *result = NULL;
+                goto out;
+            }
+
+            if (n_values != n_params) {
+                status = JULE_ERR_ARITY;
+                jule_make_arity_error(interp, tree, n_params, n_values, 0);
+                *result = NULL;
+                goto out;
+            }
         } else {
-            status = JULE_ERR_TYPE;
-            jule_make_type_error(interp, def_tree, JULE_SYMBOL, def_tree->type);
-            *result = NULL;
-            goto out;
-        }
-
-        if (n_values != n_params) {
-            status = JULE_ERR_ARITY;
-            jule_make_arity_error(interp, tree, n_params, n_values, 0);
-            *result = NULL;
-            goto out;
+            n_params = 0;
+            params   = NULL;
         }
 
         local_symtab = hash_table_make(Jule_String_ID, Jule_Value_Ptr, jule_string_id_hash);
@@ -2728,7 +2736,7 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
 
         jule_pushlocal_symtab(interp, local_symtab);
 
-        expr   = jule_elem(fn->eval_values, 2);
+        expr   = jule_elem(fn->eval_values, 1 + lambda_params);
         status = jule_eval(interp, expr, &ev);
         if (status != JULE_SUCCESS) {
             jule_pop(interp->local_symtab_stack);
@@ -2803,6 +2811,7 @@ static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value 
                     goto out;
                 case _JULE_FN:
                 case _JULE_BUILTIN_FN:
+                case _JULE_LAMBDA:
                     fn          = lookup;
                     arg_values  = NULL;
                     n_args      = 0;
@@ -2885,9 +2894,11 @@ invoke:;
 
             status = jule_invoke(interp, value, fn, n_args, arg_values, result);
             if (status != JULE_SUCCESS) {
+                jule_free_value(fn);
                 *result = NULL;
                 goto out;
             }
+            jule_free_value(fn);
             break;
 
         default:
@@ -3328,30 +3339,32 @@ static Jule_Status jule_builtin_lambda(Jule_Interp *interp, Jule_Value *tree, un
 
     status = JULE_SUCCESS;
 
-    if (n_values != 2) {
+    if (n_values < 1 || n_values > 2) {
         status = JULE_ERR_ARITY;
-        jule_make_arity_error(interp, tree, 2, n_values, 0);
+        jule_make_arity_error(interp, tree, 2 - (n_values == 1), n_values, 1 - (n_values == 2));
         *result = NULL;
         goto out;
     }
 
-    def_tree = values[0];
+    if (n_values == 2) {
+        def_tree = values[0];
 
-    if (def_tree->type == _JULE_TREE) {
-        FOR_EACH(def_tree->eval_values, it) {
-            if (it->type != JULE_SYMBOL) {
-                status = JULE_ERR_TYPE;
-                jule_make_type_error(interp, def_tree, JULE_SYMBOL, it->type);
-                *result = NULL;
-                goto out;
+        if (def_tree->type == _JULE_TREE) {
+            FOR_EACH(def_tree->eval_values, it) {
+                if (it->type != JULE_SYMBOL) {
+                    status = JULE_ERR_TYPE;
+                    jule_make_type_error(interp, def_tree, JULE_SYMBOL, it->type);
+                    *result = NULL;
+                    goto out;
+                }
+                bounds = jule_push(bounds, it);
             }
-            bounds = jule_push(bounds, it);
+        } else {
+            status = JULE_ERR_TYPE;
+            jule_make_type_error(interp, def_tree, _JULE_TREE, def_tree->type);
+            *result = NULL;
+            goto out;
         }
-    } else {
-        status = JULE_ERR_TYPE;
-        jule_make_type_error(interp, def_tree, _JULE_TREE, def_tree->type);
-        *result = NULL;
-        goto out;
     }
 
     fn       = jule_copy(tree);
@@ -3362,7 +3375,7 @@ static Jule_Status jule_builtin_lambda(Jule_Interp *interp, Jule_Value *tree, un
     closure->cur_file = fn->eval_values->aux;
     closure->captures = hash_table_make(Jule_String_ID, Jule_Value_Ptr, jule_string_id_hash);
 
-    _jule_collect_lambda_free_variables(interp, values[1], bounds, &frees);
+    _jule_collect_lambda_free_variables(interp, values[n_values == 2], bounds, &frees);
 
     FOR_EACH(frees, it) {
         lookup = jule_lookup(interp, it->symbol_id);
@@ -3370,6 +3383,9 @@ static Jule_Status jule_builtin_lambda(Jule_Interp *interp, Jule_Value *tree, un
             hash_table_insert(closure->captures, it->symbol_id, jule_copy_force(lookup));
         }
     }
+
+    jule_free_array(frees);
+    jule_free_array(bounds);
 
     fn->eval_values = jule_array_set_aux(fn->eval_values, closure);
 
