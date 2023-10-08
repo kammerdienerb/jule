@@ -103,3 +103,7 @@ println (fact 6)
 
 eval-file "examples/foo.j"
 test:foo
+
+println
+    (lambda (x) (fmt "we also have %s" x))
+        "lambda"
