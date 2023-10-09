@@ -60,15 +60,33 @@ int main(int argc, char **argv) {
 
 
 static void on_jule_error(Jule_Error_Info *info) {
-    Jule_Status  status;
-    char        *s;
+    Jule_Status           status;
+    const char           *blue;
+    const char           *red;
+    const char           *cyan;
+    const char           *reset;
+    char                 *s;
+    unsigned              i;
+    Jule_Backtrace_Entry *it;
 
     status = info->status;
 
-    fprintf(stderr, "%s:%u:%u: error: %s",
+    if (isatty(2)) {
+        blue  = "\033[34m";
+        red   = "\033[31m";
+        cyan  = "\033[36m";
+        reset = "\033[0m";
+    } else {
+        blue = red = cyan = reset = "";
+    }
+
+    fprintf(stderr, "%s%s:%u:%u:%s %serror: %s",
+            blue,
             info->file == NULL ? "<?>" : info->file,
             info->location.line,
             info->location.col,
+            reset,
+            red,
             jule_error_string(status));
 
     switch (status) {
@@ -110,7 +128,26 @@ static void on_jule_error(Jule_Error_Info *info) {
             break;
     }
 
-    fprintf(stderr, "\n");
+    fprintf(stderr, "%s\n", reset);
+
+    if (jule_len(info->interp->backtrace) > 0) {
+        fprintf(stderr, "%sbacktrace:%s\n", blue, reset);
+        for (i = jule_len(info->interp->backtrace); i > 0; i -= 1) {
+            it = jule_elem(info->interp->backtrace, i - 1);
+
+            s = jule_to_string(info->interp, it->fn, 0);
+            fprintf(stderr, "    %s%s:%u:%u%s %s%s%s\n",
+                    blue,
+                    it->file == NULL ? "<?>" : it->file->chars,
+                    it->fn->line,
+                    it->fn->col,
+                    reset,
+                    cyan,
+                    s,
+                    reset);
+            JULE_FREE(s);
+        }
+    }
 
     jule_free_error_info(info);
 

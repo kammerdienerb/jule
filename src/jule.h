@@ -74,6 +74,9 @@ typedef struct Jule_Array_Struct Jule_Array;
 struct Jule_Interp_Struct;
 typedef struct Jule_Interp_Struct Jule_Interp;
 
+struct Jule_Backtrace_Entry_Struct;
+typedef struct Jule_Backtrace_Entry_Struct Jule_Backtrace_Entry;
+
 typedef struct {
     int line;
     int col;
@@ -1143,7 +1146,13 @@ struct Jule_Interp_Struct {
     Jule_Array            *package_dirs;
     Jule_Array            *package_handles;
     Jule_Array            *package_values;
+    Jule_Array            *backtrace;
 };
+
+typedef struct Jule_Backtrace_Entry_Struct {
+    Jule_String_ID  file;
+    Jule_Value     *fn;
+} Jule_Backtrace_Entry;
 
 
 /* A lambda's eval_values->aux must point to a Jule_Closure_Info. */
@@ -2234,6 +2243,8 @@ static void _jule_string_print(Jule_Interp *interp, char **buff, int *len, int *
     Jule_Value         *child;
     Jule_Value         *key;
     Jule_Value        **val;
+    Jule_String_ID      sym;
+    Jule_String_ID      fsym;
     union {
         Jule_Fn         f;
         void           *v;
@@ -2310,19 +2321,65 @@ do {                                            \
             }
             PUSHC('}');
             break;
+        case _JULE_FN:
+            fsym = NULL;
+
+            if (jule_top(interp->local_symtab_stack) != NULL) {
+                hash_table_traverse((_Jule_Symbol_Table)jule_top(interp->local_symtab_stack), sym, val) {
+                    if ((*val) == value) {
+                        fsym = sym;
+                        break;
+                    }
+                }
+            }
+            if (fsym == NULL) {
+                hash_table_traverse(interp->symtab, sym, val) {
+                    if ((*val) == value) {
+                        fsym = sym;
+                        break;
+                    }
+                }
+            }
+            if (fsym == NULL) { goto print_tree; } /* Not sure that this could ever happen, but just to be safe. */
+            snprintf(b, sizeof(b), "<fn@%p> %s", (void*)value, fsym->chars);
+            PUSHS(b);
+            break;
         case _JULE_TREE:
         case _JULE_TREE_LINE_LEADER:
-        case _JULE_FN:
         case _JULE_LAMBDA:
-            _jule_string_print(interp, buff, len, cap, value->eval_values->data[0], ind, flags & ~JULE_NO_QUOTE);
-            for (i = 1; i < jule_len(value->eval_values); i += 1) {
-                PUSHC('\n');
-                _jule_string_print(interp, buff, len, cap, value->eval_values->data[i], ind + 2, flags & ~JULE_NO_QUOTE);
+print_tree:;
+            if (flags & JULE_MULTILINE) {
+                _jule_string_print(interp, buff, len, cap, value->eval_values->data[0], ind, flags & ~JULE_NO_QUOTE);
+                for (i = 1; i < jule_len(value->eval_values); i += 1) {
+                    PUSHC('\n');
+                    _jule_string_print(interp, buff, len, cap, value->eval_values->data[i], ind + 2, flags & ~JULE_NO_QUOTE);
+                }
+            } else {
+                PUSHC('(');
+                _jule_string_print(interp, buff, len, cap, value->eval_values->data[0], ind, flags & ~JULE_NO_QUOTE);
+                for (i = 1; i < jule_len(value->eval_values); i += 1) {
+                    PUSHC(' ');
+                    _jule_string_print(interp, buff, len, cap, value->eval_values->data[i], 0, flags & ~JULE_NO_QUOTE);
+                }
+                PUSHC(')');
             }
             break;
         case _JULE_BUILTIN_FN:
+            fsym = NULL;
+            hash_table_traverse(interp->symtab, sym, val) {
+                if ((*val)->type == _JULE_BUILTIN_FN
+                &&  (*val)->builtin_fn == value->builtin_fn) {
+
+                    fsym = sym;
+                    break;
+                }
+            }
             prfn.f = value->builtin_fn;
-            snprintf(b, sizeof(b), "<fn@%p>", prfn.v);
+            if (fsym != NULL) {
+                snprintf(b, sizeof(b), "<fn@%p> %s", prfn.v, fsym->chars);
+            } else {
+                snprintf(b, sizeof(b), "<fn@%p>", prfn.v);
+            }
             PUSHS(b);
             break;
         default:
@@ -2570,6 +2627,7 @@ static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value 
 
 static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value *fn, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status               status;
+    Jule_Backtrace_Entry     *bt_entry;
     Jule_String_ID            save_file;
     Jule_Value               *ev;
     Jule_Value               *def_tree;
@@ -2590,6 +2648,16 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
     status = JULE_SUCCESS;
 
     save_file = interp->cur_file;
+
+    bt_entry = JULE_MALLOC(sizeof(*bt_entry));
+
+    bt_entry->file = interp->cur_file;
+    bt_entry->fn   = fn;
+//     bt_entry->fn   = (tree->type == _JULE_TREE || tree->type == _JULE_TREE_LINE_LEADER)
+//                         ? jule_elem(tree->eval_values, 0)
+//                         : tree;
+
+    interp->backtrace = jule_push(interp->backtrace, bt_entry);
 
     if (fn->type == _JULE_TREE || fn->type == _JULE_TREE_LINE_LEADER) {
         interp->cur_file = fn->eval_values->aux;
@@ -2778,6 +2846,9 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
     }
 
 out:;
+
+    jule_pop(interp->backtrace);
+    JULE_FREE(bt_entry);
 
     interp->cur_file = save_file;
     return status;
@@ -5597,7 +5668,9 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     JULE_INSTALL_FN("localfn",               jule_builtin_localfn);
     JULE_INSTALL_FN("lambda",                jule_builtin_lambda);
     JULE_INSTALL_FN("id",                    jule_builtin_id);
+    JULE_INSTALL_FN("`",                     jule_builtin_id);
     JULE_INSTALL_FN("quote",                 jule_builtin_quote);
+    JULE_INSTALL_FN("'",                     jule_builtin_quote);
     JULE_INSTALL_FN("+",                     jule_builtin_add);
     JULE_INSTALL_FN("-",                     jule_builtin_sub);
     JULE_INSTALL_FN("*",                     jule_builtin_mul);
@@ -5684,11 +5757,12 @@ out:;
 }
 
 void jule_free(Jule_Interp *interp) {
-    _Jule_Symbol_Table  symtab;
-    Jule_Value         *it;
-    char               *key;
-    Jule_String_ID     *id;
-    void               *handle;
+    _Jule_Symbol_Table    symtab;
+    Jule_Value           *it;
+    char                 *key;
+    Jule_String_ID       *id;
+    void                 *handle;
+    Jule_Backtrace_Entry *bt;
 
 
     while ((symtab = jule_pop(interp->local_symtab_stack)) != NULL) {
@@ -5721,6 +5795,11 @@ void jule_free(Jule_Interp *interp) {
     jule_free_array(interp->package_handles);
 
     jule_free_array(interp->package_dirs);
+
+    FOR_EACH(interp->backtrace, bt) {
+        JULE_FREE(bt);
+    }
+    jule_free_array(interp->backtrace);
 
     memset(interp, 0, sizeof(*interp));
 }
