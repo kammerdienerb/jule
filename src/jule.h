@@ -2324,23 +2324,22 @@ do {                                            \
         case _JULE_FN:
             fsym = NULL;
 
-            if (jule_top(interp->local_symtab_stack) != NULL) {
-                hash_table_traverse((_Jule_Symbol_Table)jule_top(interp->local_symtab_stack), sym, val) {
+            for (i = jule_len(interp->local_symtab_stack); i > 0; i -= 1) {
+                hash_table_traverse((_Jule_Symbol_Table)jule_elem(interp->local_symtab_stack, i - 1), sym, val) {
                     if ((*val) == value) {
                         fsym = sym;
-                        break;
+                        goto found_fsym;
                     }
                 }
             }
-            if (fsym == NULL) {
-                hash_table_traverse(interp->symtab, sym, val) {
-                    if ((*val) == value) {
-                        fsym = sym;
-                        break;
-                    }
+            hash_table_traverse(interp->symtab, sym, val) {
+                if ((*val) == value) {
+                    fsym = sym;
+                    goto found_fsym;
                 }
             }
-            if (fsym == NULL) { goto print_tree; } /* Not sure that this could ever happen, but just to be safe. */
+            goto print_tree; /* Not sure that this could ever happen, but just to be safe. */
+found_fsym:;
             snprintf(b, sizeof(b), "<fn@%p> %s", (void*)value, fsym->chars);
             PUSHS(b);
             break;
