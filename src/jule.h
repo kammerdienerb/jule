@@ -5260,6 +5260,7 @@ static Jule_Status jule_builtin_map(Jule_Interp *interp, Jule_Value *tree, unsig
     Jule_Status  status;
     Jule_Value  *f;
     Jule_Value  *list;
+    Jule_Value  *t;
     Jule_Value  *mapped;
     Jule_Value  *it;
     Jule_Value  *ev;
@@ -5270,16 +5271,22 @@ static Jule_Status jule_builtin_map(Jule_Interp *interp, Jule_Value *tree, unsig
         goto out;
     }
 
-    JULE_BORROW(f);
+    t = ((tree->type == _JULE_TREE || tree->type == _JULE_TREE_LINE_LEADER) && jule_len(tree->eval_values) > 1)
+            ? jule_elem(tree->eval_values, 1)
+            : tree;
 
     mapped = jule_list_value();
 
     FOR_EACH(list->list, it) {
-        status = jule_invoke(interp, f, f, 1, &it, &ev);
+        status = jule_invoke(interp, t, f, 1, &it, &ev);
         if (status != JULE_SUCCESS) {
             jule_free_value(mapped);
             *result = NULL;
             goto out_free;
+        }
+        if (ev->in_symtab || ev->borrower_count) {
+            /* Make sure we get a value that can be owned by our new list. */
+            ev = jule_copy_force(ev);
         }
         mapped->list = jule_push(mapped->list, ev);
     }
@@ -5287,7 +5294,6 @@ static Jule_Status jule_builtin_map(Jule_Interp *interp, Jule_Value *tree, unsig
     *result = mapped;
 
 out_free:;
-    JULE_UNBORROW(f);
     jule_free_value(list);
     jule_free_value(f);
 
@@ -5299,6 +5305,7 @@ static Jule_Status jule_builtin_filter(Jule_Interp *interp, Jule_Value *tree, un
     Jule_Status  status;
     Jule_Value  *f;
     Jule_Value  *list;
+    Jule_Value  *t;
     Jule_Value  *filtered;
     Jule_Value  *it;
     Jule_Value  *ev;
@@ -5309,10 +5316,14 @@ static Jule_Status jule_builtin_filter(Jule_Interp *interp, Jule_Value *tree, un
         goto out;
     }
 
+    t = ((tree->type == _JULE_TREE || tree->type == _JULE_TREE_LINE_LEADER) && jule_len(tree->eval_values) > 1)
+            ? jule_elem(tree->eval_values, 1)
+            : tree;
+
     filtered = jule_list_value();
 
     FOR_EACH(list->list, it) {
-        status = jule_invoke(interp, f, f, 1, &it, &ev);
+        status = jule_invoke(interp, t, f, 1, &it, &ev);
         if (status != JULE_SUCCESS) {
             jule_free_value(filtered);
             *result = NULL;
@@ -5347,6 +5358,7 @@ static Jule_Status jule_builtin_reduce(Jule_Interp *interp, Jule_Value *tree, un
     Jule_Value  *f;
     Jule_Value  *acc;
     Jule_Value  *list;
+    Jule_Value  *t;
     Jule_Value  *it;
     Jule_Value  *arg_pass[2];
     Jule_Value  *ev;
@@ -5357,10 +5369,14 @@ static Jule_Status jule_builtin_reduce(Jule_Interp *interp, Jule_Value *tree, un
         goto out;
     }
 
+    t = ((tree->type == _JULE_TREE || tree->type == _JULE_TREE_LINE_LEADER) && jule_len(tree->eval_values) > 1)
+            ? jule_elem(tree->eval_values, 1)
+            : tree;
+
     FOR_EACH(list->list, it) {
         arg_pass[0] = acc;
         arg_pass[1] = it;
-        status = jule_invoke(interp, f, f, 2, arg_pass, &ev);
+        status = jule_invoke(interp, t, f, 2, arg_pass, &ev);
         if (status != JULE_SUCCESS) {
             jule_free_value(acc);
             *result = NULL;
@@ -5384,6 +5400,7 @@ static Jule_Status jule_builtin_apply(Jule_Interp *interp, Jule_Value *tree, uns
     Jule_Status  status;
     Jule_Value  *f;
     Jule_Value  *list;
+    Jule_Value  *t;
     Jule_Value  *ev;
 
     status = jule_args(interp, tree, "*l", n_values, values, &f, &list);
@@ -5392,7 +5409,11 @@ static Jule_Status jule_builtin_apply(Jule_Interp *interp, Jule_Value *tree, uns
         goto out;
     }
 
-    status = jule_invoke(interp, f, f, jule_len(list->list), (Jule_Value**)list->list->data, &ev);
+    t = ((tree->type == _JULE_TREE || tree->type == _JULE_TREE_LINE_LEADER) && jule_len(tree->eval_values) > 1)
+            ? jule_elem(tree->eval_values, 1)
+            : tree;
+
+    status = jule_invoke(interp, t, f, jule_len(list->list), (Jule_Value**)list->list->data, &ev);
     if (status != JULE_SUCCESS) {
         *result = NULL;
         goto out_free;
