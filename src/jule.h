@@ -2623,11 +2623,13 @@ Jule_Status jule_uninstall_local_no_free(Jule_Interp *interp, Jule_String_ID id)
 }
 
 static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value **result);
+static Jule_Status jule_builtin_elem(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result);
+static Jule_Status jule_builtin_field(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result);
 
 static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value *fn, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status               status;
-    Jule_Backtrace_Entry     *bt_entry;
     Jule_String_ID            save_file;
+    Jule_Backtrace_Entry     *bt_entry;
     Jule_Value               *ev;
     Jule_Value               *def_tree;
     Jule_Value               *fn_sym;
@@ -2643,18 +2645,21 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
     Jule_String_ID            cap_sym;
     Jule_Value              **cap_valp;
     Jule_Value               *cap_val;
+    Jule_Value                builtin;
+    Jule_Backtrace_Entry     *container_bt_entry;
+    Jule_Value              **container_args;
 
     status = JULE_SUCCESS;
+
 
     save_file = interp->cur_file;
 
     bt_entry = JULE_MALLOC(sizeof(*bt_entry));
 
     bt_entry->file = interp->cur_file;
-    bt_entry->fn   = fn;
-//     bt_entry->fn   = (tree->type == _JULE_TREE || tree->type == _JULE_TREE_LINE_LEADER)
-//                         ? jule_elem(tree->eval_values, 0)
-//                         : tree;
+    bt_entry->fn   = (fn->type == JULE_LIST || fn->type == JULE_OBJECT)
+                        ? tree
+                        : fn;
 
     interp->backtrace = jule_push(interp->backtrace, bt_entry);
 
@@ -2838,6 +2843,32 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
             *result = NULL;
             goto out;
         }
+    } else if (fn->type == JULE_LIST || fn->type == JULE_OBJECT) {
+        builtin.type = _JULE_BUILTIN_FN;
+        builtin.line = fn->line;
+        builtin.col  = fn->col;
+
+        if (fn->type == JULE_LIST) {
+            builtin.builtin_fn = jule_builtin_elem;
+        } else if (fn->type == JULE_OBJECT) {
+            builtin.builtin_fn = jule_builtin_field;
+        }
+
+        container_bt_entry = JULE_MALLOC(sizeof(*container_bt_entry));
+
+        container_bt_entry->file = interp->cur_file;
+        container_bt_entry->fn   = &builtin;
+
+        container_args    = alloca(sizeof(*container_args) * (n_values + 1));
+        container_args[0] = fn;
+        memcpy(container_args + 1, values, sizeof(*container_args) * n_values);
+
+        interp->backtrace = jule_push(interp->backtrace, container_bt_entry);
+
+        status = builtin.builtin_fn(interp, tree, n_values + 1, container_args, result);
+
+        jule_pop(interp->backtrace);
+        JULE_FREE(container_bt_entry);
     } else {
         status = JULE_ERR_BAD_INVOKE;
         jule_make_bad_invoke_error(interp, fn, fn->type);
@@ -2853,16 +2884,12 @@ out:;
     return status;
 }
 
-static Jule_Status jule_builtin_elem(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result);
-static Jule_Status jule_builtin_field(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result);
-
 static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value **result) {
     Jule_Status   status;
     Jule_Value   *lookup;
     Jule_Value   *fn;
     Jule_Value  **arg_values;
     unsigned      n_args;
-    Jule_Value    builtin;
 
     status  = JULE_SUCCESS;
     *result = NULL;
@@ -2937,38 +2964,13 @@ static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value 
                 case _JULE_FN:
                 case _JULE_BUILTIN_FN:
                 case _JULE_LAMBDA:
+                case JULE_LIST:
+                case JULE_OBJECT:
                     arg_values = (Jule_Value**)value->eval_values->data + 1;
                     n_args     = jule_len(value->eval_values) - 1;
                     break;
 
-                case JULE_LIST:
-                    if (jule_len(value->eval_values) != 2) { goto notafn; }
-
-                    memcpy(&builtin, fn, sizeof(builtin));
-                    builtin.type       = _JULE_BUILTIN_FN;
-                    builtin.builtin_fn = jule_builtin_elem;
-
-                    fn = &builtin;
-
-                    arg_values = (Jule_Value**)value->eval_values->data;
-                    n_args     = jule_len(value->eval_values);
-                    break;
-
-                case JULE_OBJECT:
-                    if (jule_len(value->eval_values) != 2) { goto notafn; }
-
-                    memcpy(&builtin, fn, sizeof(builtin));
-                    builtin.type       = _JULE_BUILTIN_FN;
-                    builtin.builtin_fn = jule_builtin_field;
-
-                    fn = &builtin;
-
-                    arg_values = (Jule_Value**)value->eval_values->data;
-                    n_args     = jule_len(value->eval_values);
-                    break;
-
                 default:;
-notafn:;
                     status = JULE_ERR_BAD_INVOKE;
                     jule_make_bad_invoke_error(interp, value, fn->type);
                     *result = NULL;
@@ -5268,6 +5270,8 @@ static Jule_Status jule_builtin_map(Jule_Interp *interp, Jule_Value *tree, unsig
         goto out;
     }
 
+    JULE_BORROW(f);
+
     mapped = jule_list_value();
 
     FOR_EACH(list->list, it) {
@@ -5283,6 +5287,7 @@ static Jule_Status jule_builtin_map(Jule_Interp *interp, Jule_Value *tree, unsig
     *result = mapped;
 
 out_free:;
+    JULE_UNBORROW(f);
     jule_free_value(list);
     jule_free_value(f);
 
