@@ -1,13 +1,11 @@
 fn (A arg)
-    do
-        println "in A" # I'm printing something
-        println arg
+    println "in A" # I'm printing something
+    println arg
 
 fn (B arg)
-    do
-        println arg
-        A "bar"
-        println arg
+    println arg
+    A "bar"
+    println arg
 
 # comment on a line
 
@@ -25,31 +23,28 @@ println
             . 789 "c"
 
 fn (true)
-    do
-        println "TRUE"
-        1
+    println "TRUE"
+    1
 
 fn (false)
-    do
-        println "FALSE"
-        0
+    println "FALSE"
+    0
 
 println (and true false)
 
-if 0
-    then (println "hi")
-    else (println "bye")
+if 0 (println "hi")
+else (println "bye")
 
 set my-object
     object
         . "test" 777
 
 fn (test object field)
-    do
-        println field
-        if (in object field)
-            println "object has the field!"
-            println "object does not have the field"
+    println field
+    if (in object field)
+        println "object has the field!"
+    else
+        println "object does not have the field"
 
 test my-object "test"
 test my-object "foo"
@@ -60,17 +55,18 @@ println (my-object "test")
 set i 0
 
 while (< i 10)
-    do
-        println "hi"
-        set i (+ 1 i)
+    println "hi"
+    set i (+ 1 i)
 
 set thing
-    repeat i 0
+    foreach i (range 0 10)
         println "bye"
-println "-----------"
+println thing
+set thing nil
 println thing
 while (!= nil thing)
     println "foo"
+println "-----------"
 
 set OBJ
     object
@@ -90,13 +86,13 @@ foreach i (list 1 2 3 4 5 6 7 8 9)
 
 
 fn (fib n)
-    if (<= n 2)
+    select (<= n 2)
         != n 0
         + (fib (- n 1)) (fib (- n 2))
 println (fib 6)
 
 fn (fact n)
-    if (== 1 n)
+    select (== 1 n)
         n
         * n (fact (- n 1))
 println (fact 6)
