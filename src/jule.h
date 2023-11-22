@@ -3390,6 +3390,44 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_eref(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *sym;
+    Jule_Value  *val;
+
+    status = jule_args(interp, tree, "$*", n_values, values, &sym, &val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    JULE_ASSERT(val->type != _JULE_REF && "this should not happen");
+
+    if (!val->in_symtab) {
+        *result = NULL;
+        jule_make_install_error(interp, tree, JULE_ERR_REF_OF_TRANSIENT, sym->symbol_id);
+        goto out_free;
+    }
+
+    val = jule_ref_value(val);
+
+    status = jule_install_local(interp, sym->symbol_id, val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        jule_make_install_error(interp, tree, status, sym->symbol_id);
+        jule_free_value(val);
+        goto out_free;
+    }
+
+    *result = val;
+
+out_free:;
+    jule_free_value(sym);
+
+out:;
+    return status;
+}
+
 static Jule_Status jule_builtin_fn(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *def_tree;
@@ -6097,6 +6135,7 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     JULE_INSTALL_FN("ref",                   jule_builtin_ref);
     JULE_INSTALL_FN("eset",                  jule_builtin_eset);
     JULE_INSTALL_FN("elocal",                jule_builtin_elocal);
+    JULE_INSTALL_FN("eref",                  jule_builtin_eref);
     JULE_INSTALL_FN("fn",                    jule_builtin_fn);
     JULE_INSTALL_FN("localfn",               jule_builtin_localfn);
     JULE_INSTALL_FN("lambda",                jule_builtin_lambda);
