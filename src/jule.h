@@ -26,7 +26,8 @@
     _JULE_STATUS_X(JULE_ERR_LOAD_PACKAGE_FAILURE,            "Failed to load package.")                                         \
     _JULE_STATUS_X(JULE_ERR_USE_PACKAGE_FORBIDDEN,           "use-package has been disabled.")                                  \
     _JULE_STATUS_X(JULE_ERR_ADD_PACKAGE_DIRECTORY_FORBIDDEN, "add-package-directory has been disabled.")                        \
-    _JULE_STATUS_X(JULE_ERR_MUST_FOLLOW_IF,                  "this special-form function must follow `if` or `elif`")
+    _JULE_STATUS_X(JULE_ERR_MUST_FOLLOW_IF,                  "this special-form function must follow `if` or `elif`")           \
+    _JULE_STATUS_X(JULE_ERR_REF_OF_TRANSIENT,                "references may only be taken to non-transient values")
 
 #define _JULE_STATUS_X(e, s) e,
 typedef enum { _JULE_STATUS } Jule_Status;
@@ -40,6 +41,7 @@ typedef enum { _JULE_STATUS } Jule_Status;
     _JULE_TYPE_X(JULE_SYMBOL,            "symbol")                           \
     _JULE_TYPE_X(JULE_LIST,              "list")                             \
     _JULE_TYPE_X(JULE_OBJECT,            "object")                           \
+    _JULE_TYPE_X(_JULE_REF,               "reference")                       \
     _JULE_TYPE_X(_JULE_TREE,             "unevaluated expression")           \
     _JULE_TYPE_X(_JULE_TREE_LINE_LEADER, "unevaluated expression")           \
     _JULE_TYPE_X(_JULE_FN,               "function")                         \
@@ -125,6 +127,7 @@ Jule_Value  *jule_symbol_value(Jule_Interp *interp, const char *symbol);
 Jule_Value  *jule_list_value(void);
 Jule_Value  *jule_builtin_value(Jule_Fn fn);
 Jule_Value  *jule_object_value(void);
+Jule_Value  *jule_ref_value(Jule_Value *ref_of);
 void         jule_insert(Jule_Value *object, Jule_Value *key, Jule_Value *val);
 void         jule_delete(Jule_Value *object, Jule_Value *key);
 Jule_Value  *jule_lookup(Jule_Interp *interp, Jule_String_ID id);
@@ -1070,6 +1073,7 @@ struct Jule_Value_Struct {
         Jule_Array         *list;
         Jule_Array         *eval_values;
         Jule_Fn             builtin_fn;
+        Jule_Value         *ref_of;
     };
     unsigned long long      type           :                         4; //  4
     unsigned long long      in_symtab      :                         1; //  5
@@ -1434,6 +1438,20 @@ Jule_Value *jule_object_value(void) {
     return value;
 }
 
+Jule_Value *jule_ref_value(Jule_Value *ref_of) {
+    Jule_Value *value;
+
+    value = _jule_value();
+
+    value->type   = _JULE_REF;
+    value->ref_of = ref_of;
+
+    JULE_BORROW(ref_of);
+    JULE_BORROWER(value);
+
+    return value;
+}
+
 static inline int jule_value_is_freeable(Jule_Value *value) {
     return !(value->borrower_count || value->borrow_count || value->in_symtab);
 }
@@ -1477,6 +1495,9 @@ static void _jule_free_value(Jule_Value *value, int force) {
             }
             hash_table_free((_Jule_Object)value->object);
             value->object = NULL;
+            break;
+        case _JULE_REF:
+            JULE_ASSERT(value->borrower_count == 0 && "still marked as a borrower");
             break;
         case _JULE_LAMBDA:
             closure = value->eval_values->aux;
@@ -1612,6 +1633,9 @@ static Jule_Value *_jule_copy(Jule_Value *value, int force) {
             hash_table_traverse(obj, key, val) {
                 hash_table_insert((_Jule_Object)copy->object, _jule_copy(key, force), _jule_copy(*val, force));
             }
+            break;
+        case _JULE_REF:
+            copy = _jule_copy(value->ref_of, force);
             break;
         case _JULE_TREE:
         case _JULE_TREE_LINE_LEADER:
@@ -2522,6 +2546,7 @@ static _Jule_Symbol_Table jule_local_symtab(Jule_Interp *interp) {
 
 Jule_Value *jule_lookup(Jule_Interp *interp, Jule_String_ID id) {
     Jule_Value **lookup;
+    Jule_Value  *val;
 
     lookup = hash_table_get_val(jule_local_symtab(interp), id);
 
@@ -2529,7 +2554,15 @@ Jule_Value *jule_lookup(Jule_Interp *interp, Jule_String_ID id) {
         lookup = hash_table_get_val(interp->symtab, id);
     }
 
-    return lookup == NULL ? NULL : *lookup;
+    if (lookup == NULL) { return NULL; }
+
+    val = *lookup;
+
+    if (val->type == _JULE_REF) {
+        val = val->ref_of;
+    }
+
+    return val;
 }
 
 Jule_Value *jule_lookup_local_only(Jule_Interp *interp, Jule_String_ID id) {
@@ -2588,7 +2621,12 @@ static Jule_Status jule_uninstall_common(Jule_Interp *interp, _Jule_Symbol_Table
     hash_table_delete(symtab, id);
 
 
-    do_free = do_free && (val->borrower_count == 0);
+    do_free = do_free && (val->type == _JULE_REF || val->borrower_count == 0);
+
+    if (val->type == _JULE_REF) {
+        JULE_UNBORROWER(val);
+        JULE_UNBORROW(val->ref_of);
+    }
 
     if (do_free) {
         if (val->borrow_count) {
@@ -3226,6 +3264,44 @@ static Jule_Status jule_builtin_local(Jule_Interp *interp, Jule_Value *tree, uns
         jule_free_value(val);
         val = cpy;
     }
+
+    status = jule_install_local(interp, sym->symbol_id, val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        jule_make_install_error(interp, tree, status, sym->symbol_id);
+        jule_free_value(val);
+        goto out_free;
+    }
+
+    *result = val;
+
+out_free:;
+    jule_free_value(sym);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_ref(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *sym;
+    Jule_Value  *val;
+
+    status = jule_args(interp, tree, "-$*", n_values, values, &sym, &val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    JULE_ASSERT(val->type != _JULE_REF && "this should not happen");
+
+    if (!val->in_symtab) {
+        *result = NULL;
+        jule_make_install_error(interp, tree, JULE_ERR_REF_OF_TRANSIENT, sym->symbol_id);
+        goto out_free;
+    }
+
+    val = jule_ref_value(val);
 
     status = jule_install_local(interp, sym->symbol_id, val);
     if (status != JULE_SUCCESS) {
@@ -6018,6 +6094,7 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     JULE_INSTALL_FN("eval",                  jule_builtin_eval);
     JULE_INSTALL_FN("set",                   jule_builtin_set);
     JULE_INSTALL_FN("local",                 jule_builtin_local);
+    JULE_INSTALL_FN("ref",                   jule_builtin_ref);
     JULE_INSTALL_FN("eset",                  jule_builtin_eset);
     JULE_INSTALL_FN("elocal",                jule_builtin_elocal);
     JULE_INSTALL_FN("fn",                    jule_builtin_fn);
