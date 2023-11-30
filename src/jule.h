@@ -4447,9 +4447,9 @@ out:;
 }
 
 static Jule_Status jule_builtin_parse_hex(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
-    Jule_Status  status;
-    Jule_Value  *s;
-    long long    i;
+    Jule_Status         status;
+    Jule_Value         *s;
+    unsigned long long  i;
 
     status = jule_args(interp, tree, "s", n_values, values, &s);
     if (status != JULE_SUCCESS) {
