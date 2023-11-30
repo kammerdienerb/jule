@@ -1158,10 +1158,10 @@ struct Jule_Interp_Struct {
     int                    last_if_was_true;
 };
 
-typedef struct Jule_Backtrace_Entry_Struct {
+struct Jule_Backtrace_Entry_Struct {
     Jule_String_ID  file;
     Jule_Value     *fn;
-} Jule_Backtrace_Entry;
+};
 
 
 /* A lambda's eval_values->aux must point to a Jule_Closure_Info. */
