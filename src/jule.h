@@ -2605,7 +2605,12 @@ static Jule_Status jule_install_common(Jule_Interp *interp, _Jule_Symbol_Table s
     lookup = hash_table_get_val(symtab, id);
     if (lookup != NULL) {
         if (*lookup != val) {
-            if (!(*lookup)->borrower_count) {
+            if ((*lookup)->type == _JULE_REF) {
+                JULE_UNBORROWER((*lookup));
+                JULE_UNBORROW((*lookup)->ref_of);
+                (*lookup)->in_symtab = 0;
+                jule_free_value(*lookup);
+            } else if (!(*lookup)->borrower_count) {
                 if ((*lookup)->borrow_count) {
                     return JULE_ERR_RELEASE_WHILE_BORROWED;
                 }
