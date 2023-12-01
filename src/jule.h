@@ -5767,7 +5767,7 @@ static Jule_Status jule_builtin_sorted(Jule_Interp *interp, Jule_Value *tree, un
 
     sorted = jule_copy_force(list);
 
-    if (sorted->list->len > 0) {
+    if (jule_len(sorted->list) > 0) {
         sort_type = JULE_UNKNOWN;
 
         FOR_EACH(sorted->list, it) {
@@ -5791,7 +5791,7 @@ static Jule_Status jule_builtin_sorted(Jule_Interp *interp, Jule_Value *tree, un
         sort_arg.interp    = interp;
         sort_arg.sort_type = sort_type;
 
-        sort_r(sorted->list->data, sorted->list->len, sizeof(*(sorted->list->data)), jule_sort_value_cmp, &sort_arg);
+        sort_r(sorted->list->data, jule_len(sorted->list), sizeof(*(sorted->list->data)), jule_sort_value_cmp, &sort_arg);
     }
 
     *result = sorted;
