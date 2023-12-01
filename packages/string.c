@@ -120,12 +120,74 @@ out:;
     return status;
 }
 
+static Jule_Status j_index(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    int                 status;
+    Jule_Value         *haystack;
+    Jule_Value         *needle;
+    const char         *h;
+    const char         *n;
+    const char         *s;
+
+    status = jule_args(interp, tree, "ss", n_values, values, &haystack, &needle);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    h = jule_get_string(interp, haystack->string_id)->chars;
+    n = jule_get_string(interp, needle->string_id)->chars;
+
+    s = strstr(h, n);
+
+    if (s == NULL) {
+        *result = jule_nil_value();
+    } else {
+        *result = jule_number_value(s - h);
+    }
+
+    jule_free_value(haystack);
+    jule_free_value(needle);
+
+out:;
+    return status;
+}
+
+static Jule_Status j_contains(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    int                 status;
+    Jule_Value         *haystack;
+    Jule_Value         *needle;
+    const char         *h;
+    const char         *n;
+    const char         *s;
+
+    status = jule_args(interp, tree, "ss", n_values, values, &haystack, &needle);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    h = jule_get_string(interp, haystack->string_id)->chars;
+    n = jule_get_string(interp, needle->string_id)->chars;
+
+    s = strstr(h, n);
+
+    *result = jule_number_value(s != NULL);
+
+    jule_free_value(haystack);
+    jule_free_value(needle);
+
+out:;
+    return status;
+}
+
 Jule_Value *jule_init_package(Jule_Interp *interp) {
 #define JULE_INSTALL_FN(_name, _fn) jule_install_fn(interp, jule_get_string_id(interp, (_name)), (_fn))
 
-    JULE_INSTALL_FN("string:split",   j_split);
-    JULE_INSTALL_FN("string:replace", j_replace);
-    JULE_INSTALL_FN("string:trim",    j_trim);
+    JULE_INSTALL_FN("string:split",    j_split);
+    JULE_INSTALL_FN("string:replace",  j_replace);
+    JULE_INSTALL_FN("string:trim",     j_trim);
+    JULE_INSTALL_FN("string:index",    j_index);
+    JULE_INSTALL_FN("string:contains", j_contains);
 
     return jule_string_value(interp, "string: String wrangling package.");
 }
