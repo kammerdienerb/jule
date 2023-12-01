@@ -92,7 +92,10 @@ static void on_jule_error(Jule_Error_Info *info) {
     switch (status) {
         case JULE_ERR_LOOKUP:
         case JULE_ERR_RELEASE_WHILE_BORROWED:
-            fprintf(stderr, " (%s)", info->sym);
+        case JULE_ERR_MODIFY_WHILE_ITER:
+            if (info->sym != NULL) {
+                fprintf(stderr, " (%s)", info->sym);
+            }
             break;
         case JULE_ERR_ARITY:
             fprintf(stderr, " (wanted %s%d, got %d)",
