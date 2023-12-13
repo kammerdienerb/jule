@@ -10,8 +10,8 @@ static Jule_Status j_split(Jule_Interp *interp, Jule_Value *tree, unsigned n_val
     Jule_Value *s;
     Jule_Value *t;
     char       *cpy;
+    const char *delim;
     const char *tok;
-    const char *word;
 
     status = jule_args(interp, tree, "ss", n_values, values, &s, &t);
     if (status != JULE_SUCCESS) {
@@ -19,14 +19,57 @@ static Jule_Status j_split(Jule_Interp *interp, Jule_Value *tree, unsigned n_val
         goto out;
     }
 
-    cpy = jule_charptr_dup(jule_get_string(interp, s->string_id)->chars);
-    tok = jule_get_string(interp, t->string_id)->chars;
+    cpy   = jule_charptr_dup(jule_get_string(interp, s->string_id)->chars);
+    delim = jule_get_string(interp, t->string_id)->chars;
 
     *result = jule_list_value();
 
-    for (word = strtok(cpy, tok); word != NULL; word = strtok(NULL, tok)) {
-        (*result)->list = jule_push((*result)->list, jule_string_value(interp, word));
+    for (tok = strtok(cpy, delim); tok != NULL; tok = strtok(NULL, delim)) {
+        (*result)->list = jule_push((*result)->list, jule_string_value(interp, tok));
     }
+
+    JULE_FREE(cpy);
+
+    jule_free_value(s);
+    jule_free_value(t);
+
+out:;
+    return status;
+}
+
+static Jule_Status j_splits(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    int                 status;
+    Jule_Value         *s;
+    Jule_Value         *t;
+    char               *cpy;
+    const char         *delim;
+    unsigned long long  delim_len;
+    const char         *tok;
+    char               *next;
+    char                c;
+
+    status = jule_args(interp, tree, "ss", n_values, values, &s, &t);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    cpy       = jule_charptr_dup(jule_get_string(interp, s->string_id)->chars);
+    delim     = jule_get_string(interp, t->string_id)->chars;
+    delim_len = jule_get_string(interp, t->string_id)->len;
+
+    *result = jule_list_value();
+
+    tok = cpy;
+
+    while ((next = strstr(tok, delim)) != NULL) {
+        c = *next;
+        *next = 0;
+        (*result)->list = jule_push((*result)->list, jule_string_value(interp, tok));
+        *next = c;
+        tok = next + delim_len;
+    }
+    (*result)->list = jule_push((*result)->list, jule_string_value(interp, tok));
 
     JULE_FREE(cpy);
 
@@ -184,6 +227,7 @@ Jule_Value *jule_init_package(Jule_Interp *interp) {
 #define JULE_INSTALL_FN(_name, _fn) jule_install_fn(interp, jule_get_string_id(interp, (_name)), (_fn))
 
     JULE_INSTALL_FN("string:split",    j_split);
+    JULE_INSTALL_FN("string:splits",   j_splits);
     JULE_INSTALL_FN("string:replace",  j_replace);
     JULE_INSTALL_FN("string:trim",     j_trim);
     JULE_INSTALL_FN("string:index",    j_index);
